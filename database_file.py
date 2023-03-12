@@ -3,7 +3,7 @@ from datetime import datetime
 from random import choice, choices
 from unicodedata import category
 from xml.etree.ElementInclude import default_loader
-from aenum import unique
+# from aenum import unique
 from numpy import true_divide
 from peewee import *
 
@@ -127,10 +127,7 @@ class Employee_Permission(Model):
     settings_tap =  IntegerField()
 
     # Settings Permission
-    add_branch =  IntegerField()
-    add_publisher =  IntegerField()
-    add_author =  IntegerField()
-    add_category =  IntegerField()
+    add_data =  IntegerField()
     add_employee =  IntegerField()
     edit_employee =  IntegerField()
 
@@ -146,6 +143,7 @@ class Branch(Model):
     name = CharField()
     code = CharField(null=True , unique=True)
     location = CharField(null=True)
+    admin = CharField()
 
     
 
@@ -161,6 +159,7 @@ class Daily_Movments(Model):
     book = ForeignKeyField(Books , backref='daily_book')
     client = ForeignKeyField(Clients , backref='book_client')
     type = CharField(choices=PROCESS_TYPE)  # Rent or Retreve
+    price = IntegerField(null=True)
     date = DateTimeField(default=datetime.now)
     branch = ForeignKeyField(Branch,backref='Daily_branch' , null=True)
     Book_from = DateField(null=True)

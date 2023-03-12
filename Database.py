@@ -69,6 +69,20 @@ class ConnectSqlite3():
         
         else:
             print("We cannot do the operator!!.")
+
+    
+    # Delete table in database.
+    def deleteData(self, sql):
+        """Delete data into its table
+        \nYou may use <delete from tableName where name = value> this query,
+        then pass the argument data with your data."""
+        
+        if len(sql) != empty:
+            self.cur.execute(sql)
+            self.db.commit()
+        
+        else:
+            print("We cannot do the operator!!.")
     
     
     # Get one row of data from database.

@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from PyQt5.uic import loadUiType
 
-import sys , sqlite3 , Tools, login_frame, Database, TabWidget, ExcelFiles
+import sys , sqlite3 , Tools, login_frame, Database, TabWidget, ExcelFiles, DateFile, random
 # from xlsxwriter import *
 
 
@@ -26,13 +26,16 @@ print("Connected to Database.")
 
 """ Gloabl Variable"""
 empty = 0 # to use in if statements.
+adminAccess = 0
+resetPasswordAccess = 0
 
 # employee_id & branch_id for history ,check database
-employee_id = 0
-branch_id = 0
+employee_id = 'admin'
+branch_id = 'admin'
 
 # Default Image for Book
-default_book_image = '/home/izy/Desktop/Library System/wBook.png'
+default_book_image = 'wBook.png'
+systemImage = "bg.jpeg"
 use_book = 1
 
 
@@ -45,7 +48,6 @@ class Main(QMainWindow , MainUI):
         QMainWindow.__init__(self)
         
         self.setupUi(self)
-        self.Db_Connect()
         self.UI_Changes()
         self.Handle_Buttons()
 
@@ -69,31 +71,34 @@ class Main(QMainWindow , MainUI):
         
 
         # Login
-        self.Handle_Login()
+        if login_frame.resetPasswordStatus == False:
+            self.Handle_Login()
 
-        # Retrieve Daily movments
-        # self.Retrieve()
+        else:
+            self.Open_Reset_Password_Tap()
+        
 
 
     # Handling GUI changes.
     def UI_Changes(self):
         self.tabWidget.tabBar().setVisible(False)
         
+    def prt(self):
+        print("YEss")
 
-
-    def Db_Connect(self):
-        # Connect Between Database and Programe.
-        self.db = sqlite3.connect("Library_Database.db")
-        self.cur = self.db.cursor()
-        print("Connected!")
+    def prt2(self):
+        print("YEssaa")
 
 
     # Call the Buutons in one Group to Load them in system
     def Handle_Buttons(self):
 
         
+       
 
         # Open Taps Buttons
+        self.pushButton_54.clicked.connect(self.OpenProfileTab)
+        self.pushButton_21.clicked.connect(self.LogoutSystem)
         self.pushButton.clicked.connect(self.Open_Daily_Movment_Tap)
         self.pushButton_2.clicked.connect(self.Open_Books_Tap)
         self.pushButton_6.clicked.connect(self.Open_Clients_Tap)
@@ -102,11 +107,15 @@ class Main(QMainWindow , MainUI):
         self.pushButton_3.clicked.connect(self.Open_Reports_Tap)
         self.pushButton_7.clicked.connect(self.Open_Settings_Tap)
 
+        # Reset Password Buttons 
+        self.pushButton_getCodePassword_forgetPassword.clicked.connect(self.Handle_Reset_Password)
+
+
         #### Daily Movemnet Buttons
         self.pushButton_23.clicked.connect(self.getDilyTabSearch)
         self.pushButton_37.clicked.connect(self.getOrder)
-        self.pushButton_22.clicked.connect(self.openCommitOrder)
         self.pushButton_8.clicked.connect(self.commitBookOrder)
+        self.pushButton_9.clicked.connect(self.getBookPrice)
 
         #### Books Tap's Buttons
         self.pushButton_13.clicked.connect(self.Add_New_Book)
@@ -122,31 +131,44 @@ class Main(QMainWindow , MainUI):
 
         #### Clients Tap's Buttons
         self.pushButton_27.clicked.connect(self.Add_New_Client)
+        self.pushButton_26.clicked.connect(self.SearchAboutClient)
         self.pushButton_28.clicked.connect(self.Edit_Client_Search)
         self.pushButton_29.clicked.connect(self.Save_Edit_Client)
         self.pushButton_30.clicked.connect(self.Delete_Client)
+        self.pushButton_45.clicked.connect(self.ExportListOfClients)
 
+        # Dashbourd Buttons
+        self.pushButton_53.clicked.connect(self.chooseImageForBranch)
 
+        # History Buttons.
+        self.pushButton_33.clicked.connect(self.searchInHistory)
+        self.pushButton_47.clicked.connect(self.ExportListOfActions)
+        
+        
 
-
-        #### Settings Buttons
+        """===== Settings Buttons ====="""
         # Setting [All Data] Buttons
         self.pushButton_24.clicked.connect(self.Add_Branch)
         self.pushButton_25.clicked.connect(self.Add_Publisher)
         self.pushButton_31.clicked.connect(self.Add_Author)
         self.pushButton_32.clicked.connect(self.Add_Category)
+
         # Employeies tap's buttons
         self.pushButton_38.clicked.connect(self.Add_Employee)
         self.pushButton_36.clicked.connect(self.Check_Employee_toEdit)
-        self.pushButton_56.clicked.connect(self.Save_Edit_Employee) 
-        self.pushButton_40.clicked.connect(self.Add_Employee_Permissions) 
+        self.pushButton_56.clicked.connect(self.CommitEmployeeEdit) 
+        self.pushButton_40.clicked.connect(self.Edit_Employee_Permissions) 
         self.pushButton_39.clicked.connect(self.Check_empployee_Permissions)
+        self.pushButton_41.clicked.connect(self.Open_Reset_Password_Tap)
 
+        # Admin Reports Buttons.
+        self.pushButton_48.clicked.connect(self.Admin_Report)
+        
 
         #### Reports Buttons 
-        self.pushButton_49.clicked.connect(self.All_Books_Reports) # Export tab book
-        self.pushButton_50.clicked.connect(self.All_Clients_Reports)
-        self.pushButton_51.clicked.connect(self.All_Employeies_Reports)
+        self.pushButton_49.clicked.connect(self.ExportReportOfBooks) 
+        self.pushButton_50.clicked.connect(self.ExportReportAboutClients)
+        self.pushButton_51.clicked.connect(self.ExportReportAboutEmployeies)
 
         # Open Image
         self.pushButton_17.clicked.connect(self.getImage)
@@ -183,7 +205,7 @@ class Main(QMainWindow , MainUI):
         self.pushButton_30.setEnabled(1)
 
         # Settings's tap buttons
-        self.tabWidget_4.setTabVisible(1,1) # Add new or edit employee
+        self.tabWidget_4.setTabVisible(1,1) # Add new employee
         self.tabWidget_4.setTabVisible(2,1) # permissions
         self.tabWidget_4.setTabVisible(3,1) # reports
         self.pushButton_25.setEnabled(1)
@@ -195,7 +217,7 @@ class Main(QMainWindow , MainUI):
         self.pushButton_38.setEnabled(1)
 
     # Get employee permissions from database, and return it.
-    def getEmployeePermissions(self):
+    def getEmployeePermissions(self, username):
         # Get permissions from database
         employeePermissions = database.getOne("select * from employee_permission where name = '{}'".format(username))
 
@@ -203,9 +225,9 @@ class Main(QMainWindow , MainUI):
             'name':employeePermissions[1], 
             'add_book':employeePermissions[2], 'edit_book':employeePermissions[3], 'delete_book':employeePermissions[4], 'export_book':employeePermissions[5], 'import_book':employeePermissions[6],
             'add_client':employeePermissions[7], 'edit_client':employeePermissions[8], 'delete_client':employeePermissions[9], 'export_client':employeePermissions[10], 'import_client':employeePermissions[11],
-            'book_tap':employeePermissions[12], 'cient_tap':employeePermissions[13], 'dashbuord_tap':employeePermissions[14], 'history_tap':employeePermissions[15], 'reports_tap':employeePermissions[16], 'setting_tap':employeePermissions[17],
-            'add_branch':employeePermissions[18], 'add_publiher':employeePermissions[19], 'add_author':employeePermissions[20], 'add_cateogry':employeePermissions[21],
-            'add_employee':employeePermissions[22], 'edit_employee':employeePermissions[23], 'admin':employeePermissions[24]
+            'book_tap':employeePermissions[12], 'client_tap':employeePermissions[13], 'dashbuord_tap':employeePermissions[14], 'history_tap':employeePermissions[15], 'reports_tap':employeePermissions[16], 'setting_tap':employeePermissions[17],
+            'add_data':employeePermissions[18], 'add_employee':employeePermissions[19], 'edit_employee':employeePermissions[20],
+            'admin':employeePermissions[21]
         }
 
         return thePermissions
@@ -236,7 +258,7 @@ class Main(QMainWindow , MainUI):
 
         else: # Loginning as an Employee
             # Check username and password data in database.
-            employeeLoginData = database.getAll("select name, password, Branch from employee where name = '{}' and Password = '{}'".format(username, password))
+            employeeLoginData = database.getOne("select name, Branch from employee where name = '{}' and Password = '{}'".format(username, password))
             empty = 0
 
             if len( employeeLoginData ) != empty:
@@ -244,14 +266,16 @@ class Main(QMainWindow , MainUI):
                 # Get employee_id & branch
                 global employee_id, branch_id
 
-                employee_id = employeeLoginData[0][1]
-                branch_id = employeeLoginData[0][2]
-
+                employee_id = employeeLoginData[0]
+                branch_id = employeeLoginData[1]
+                branch_id = database.getOne("select name from branch where code = {}".format(branch_id))[0]
             
                 # Get permissions from database
-                employeePermissions = self.getEmployeePermissions()
+                employeePermissions = self.getEmployeePermissions(username)
 
                 print("Loginnig... --> username is {}".format(username))
+                print("Welcome {} to Branch {}".format(employee_id, branch_id))
+
 
 
             else:
@@ -261,6 +285,7 @@ class Main(QMainWindow , MainUI):
         # Enable Permissions Acces
         if loginAsAdmin == True: # just my own user UwU
             print("Welcome Admin... \nWait to set the permissions.")
+            print("Ready to get Data...")
             
             # Admin -> All permissions
             self.adminPermissions()            
@@ -270,13 +295,15 @@ class Main(QMainWindow , MainUI):
 
         elif loginAsUser == True: # --> Login as employee
 
-            print("Welcome {} ... \nwait to set the permissions.".format(username))
+            print("Mr {}... wait to set the permissions.".format(username))
+            print("Ready to get Data...")
+
 
             if employeePermissions['admin']==True: # Admin -> All permissions
                 self.adminPermissions()
 
             # Book tap permissions
-            if employeePermissions['add_book']==True: 
+            if employeePermissions['book_tap']==True: 
                 self.pushButton_2.setEnabled(1)
 
                 if employeePermissions['export_book'] == True:# Check Export  
@@ -296,7 +323,7 @@ class Main(QMainWindow , MainUI):
                         self.pushButton_16.setEnabled(1)
 
             # Client tap permissions
-            if employeePermissions['client_book'] == True : 
+            if employeePermissions['client_tap'] == True : 
                 self.pushButton_6.setEnabled(1)
 
                 if employeePermissions['export_client'] == True :# Check Export  
@@ -320,7 +347,7 @@ class Main(QMainWindow , MainUI):
                 self.pushButton_5.setEnabled(1)
             
             # History tab permissions
-            if employeePermissions['hitory_tap'] == True :
+            if employeePermissions['history_tap'] == True :
                 self.pushButton_4.setEnabled(1)
 
             # Reports tab permissions
@@ -338,24 +365,33 @@ class Main(QMainWindow , MainUI):
                     self.pushButton_36.setEnabled(1)
                     self.pushButton_41.setEnabled(1)
 
-                if employeePermissions['add_branch'] == True : # Add branch
+                if employeePermissions['add_data'] == True : # Add data
                     self.pushButton_24.setEnabled(1)
-                
-                if employeePermissions['add_publisher'] == True : # Add publisher
                     self.pushButton_25.setEnabled(1)
-                
-                if employeePermissions['add_author'] == True : # Add author
                     self.pushButton_31.setEnabled(1)
-                
-                if employeePermissions['add_category'] == True : # Add category
                     self.pushButton_32.setEnabled(1)
+                
+                if employeePermissions['add_employee'] == True : # Add employee
+                    self.tabWidget_4.setTabVisible(1,1)
+                else:
+                    self.tabWidget_4.setTabVisible(1,0)
 
+
+                    
+                    
+                
+                if employeePermissions['edit_employee'] == True : # edit employee
+                    self.tabWidget_4.setTabVisible(2,1)
+                else:
+                    self.tabWidget_4.setTabVisible(2,0)
+
+                
             # Add this Aciotn in History
             history_id = database.generateID("select * from history")
             dateFromSystem = datetime.now().strftime('%d-%m-%Y %H:%M')
             
             database.insertManyData("insert into history values(?,?,?,?,?,?)",[
-                (history_id, employee_id, 'Loing', dateFromSystem, branch_id, username)
+                (history_id, employee_id, 'Login', dateFromSystem, branch_id, username)
             ])
             
             
@@ -363,9 +399,52 @@ class Main(QMainWindow , MainUI):
             self.Open_Daily_Movment_Tap()
 
         
-
+    # Handle reset employee password.
     def Handle_Reset_Password(self):
-        pass
+        canRun = True
+
+        # Variables.
+        employeeName = self.comboBox_selectEmployee_forgetPassword.currentText()
+        adminPassword = self.lineEdit_writeAdminPassword_forgetPassword.text()
+        label = self.label_getNewPassword_forgetPassword
+        newPassword = 0
+
+        # Check
+        fields = {'admin password':adminPassword}
+        isFieldsEmpty = Tools.checkFields(fields)
+
+        if isFieldsEmpty==empty :
+            canRun = False
+
+        # Run.
+        if canRun==True and adminPassword=='000':
+
+            newPassword = Tools.getNewPassword(employeeName)
+            
+            if newPassword==empty:
+                "There is no employee with this name '{}'".format(employeeName)
+            else:
+
+                # Save.
+                actions = {'action':'edit employee password',
+                           'extra':employeeName,
+                           'branch id':branch_id,
+                           'employee id':employee_id}
+                Tools.SaveActionToHistory(actions)
+                database.updateData("update employee set Password = {} where name = '{}'".format(newPassword, employeeName))
+
+                # Notification.
+                print("The new password is {}".format(newPassword))
+                msg = "The new password is {}\nNow restart the system".format(newPassword)
+                label.setText(msg)
+
+                
+
+                
+        else:
+            print("Admin Password Wrong!!")
+
+                
 
     """==================================================================================
     ========================= Today tab's functions =================================="""
@@ -395,31 +474,40 @@ class Main(QMainWindow , MainUI):
     def getOrder(self):
 
         searchText = self.lineEdit_60
-        table = self.tableWidget_4
-
-        thisData = {'search text':searchText, 'table':table}
-        hpTool.getOrderTabSearch(thisData)
-
-
-    """Commit order tab"""
-    def openCommitOrder(self): # --> Tool to do in UI.
-        """Opent the tab and load book title field."""
-        # OPEN 
-        self.TaodayWidget.setCurrentIndex(2)
+        label = self.lineEdit_4
+        price = self.label_67
         
-        # GET
-        orderABook = self.lineEdit_60.text()
+        table = self.tableWidget_4
+        tab = self.TaodayWidget
 
-        # SET
-        self.lineEdit_4.setText(orderABook)    
+        thisData = {'search text':searchText, 'table':table, 'tab':tab, 'label':label, 'price':price}
+        hpTool.getOrderTabSearch(thisData)
+        
 
+    
+
+    # Check and Get the Price.
+    def getBookPrice(self):
+
+        bookName = self.lineEdit_4.text()
+
+        if len(bookName)==empty:
+            print("Please Book title cannot be empty!")
+        
+        else:
+        
+            price = hpTool.getBookPrice(bookName)
+            txt = "The Price : "+str(price)+"$"+"\nNote: Rent fee is 2$"
+            self.label_67.setText(txt)
+            return price
+            
     # Workable
     def commitBookOrder(self): # Wrok with GUI --> Commit Order Tab.
 
         # GET DATA
         bookTitle = self.lineEdit_4.text()
         clientID = self.lineEdit_7.text()
-        orderType = self.comboBox.currentText()
+        orderType = self.comboBox
 
         label = self.label_21
 
@@ -462,10 +550,16 @@ class Main(QMainWindow , MainUI):
     def Show_All_Books(self):
 
         # VARIABLES
-        thisData = {'branch id':branch_id, 'table':self.tableWidget_3}     
+        thisData = {'branch id':branch_id, 'table':self.tableWidget_3, 'tab':self.tabWidget_2, 'text':self.lineEdit_8}     
 
         # RUN
         helpTool.BookTab().getAllBooks(thisData)
+
+        
+            
+
+
+        
 
 
     # Open a Dialog Window and Get Pecture for Books or a Profile
@@ -477,8 +571,9 @@ class Main(QMainWindow , MainUI):
 
         # Open Dialog and Get Picture
         img_name = QFileDialog.getOpenFileName(self, "Get the Image", "/home/izy/Desktop/Library System", "All Files (*);;PNG Files (*.png)")
-
+        QFileDialog.getOpenFileName()
         # Open The Image this run
+        print(img_name)
         self.pixmap = QPixmap(img_name[0])
 
         # Add Image to Label
@@ -492,13 +587,20 @@ class Main(QMainWindow , MainUI):
     def Add_New_Book(self):
          
         # Get Data from GUI [Fields]
-        bookTitle = self.lineEdit_6.text(); bookPrice = self.lineEdit_11.text()
-        bookCode = self.lineEdit_47.text(); bookPart = self.lineEdit_50.text()
+        bookTitle = self.lineEdit_6.text() 
+        bookPrice = self.lineEdit_11.text()
+
+        bookPart = self.lineEdit_50.text()
+        bookDescription = self.textEdit.toPlainText()
+
+        bookCategory = self.comboBox_4.currentText()
+        bookPublisher = self.comboBox_8.currentText()
         
-        bookBarcode = self.lineEdit_49.text(); bookDescription = self.textEdit.toPlainText()
-        bookCategory = self.comboBox_4.currentText(); bookPublisher = self.comboBox_8.currentText()
-        
-        bookAuthor = self.comboBox_6.currentText(); bookStatus = self.comboBox_7.currentText()
+        bookAuthor = self.comboBox_6.currentText()
+        bookStatus = self.comboBox_7.currentText()
+
+        bookCode = str( self.comboBox_4.currentIndex() ) +'0'+ str( random.randint(111, 999) )
+        bookBarcode = "249"+str(random.randint(111111, 999999))
         bookQuantity = self.lineEdit_54.text()
 
         # Get the Image
@@ -532,11 +634,14 @@ class Main(QMainWindow , MainUI):
         # Clear Fields
         self.lineEdit_6.clear()
         self.lineEdit_11.clear()
-        self.lineEdit_47.clear()
         self.lineEdit_50.clear()
-        self.lineEdit_49.clear()        
         self.textEdit.clear()
         self.lineEdit_54.clear()
+        self.comboBox_4.setCurrentIndex(0)
+        self.comboBox_8.setCurrentIndex(0)
+        self.comboBox_6.setCurrentIndex(0)
+        self.comboBox_7.setCurrentIndex(0)
+        
 
 
     # Edit a Book and svae changes in database
@@ -566,593 +671,41 @@ class Main(QMainWindow , MainUI):
 
     # Delete a Book and Save th Changes in Database
     def Delete_Book(self):
-        
+
+        # action, extra, branch id, employee id
+        # submitDeleteBook
+        # VARIABLES
         code = self.lineEdit_8.text() # Get a code to search via 
+        thisData = {'branch id':branch_id, 'employee id':employee_id, 'code':code}
 
-        # Get book name
-        self.cur.execute("selcet name from books where code = {}".format(code))        
-        book_title = self.cur.fetchone()[0]
-        # Delete from database
-        self.cur.execute("delete from books where code = {}".format(code))        
+        # RUN
+        TabWidget.BookTab().submitDeleteBook(thisData)
 
-        # Add this Actions in History
-        # Generate History id
-        self.cur.execute("select * from history")
-        history_id = len( self.cur.fetchall() ) +1
-        date = datetime.now().strftime('%d-%m-%Y %H:%M')
+        # Refreash Data
+        self.Show_All_Books()
 
-
-        # Check is There another id same and fix it
-        self.cur.execute("select * from books where id = '{}'".format(history_id))
-        count_id = len( self.cur.fetchall() )
-        
-        if count_id > 0:
-            history_id+=1
-
-        self.cur.executemany("insert into history values (?,?,?,?,?,?)",[(
-            history_id, employee_id, "Delete Book", date, branch_id, book_title
-        )])
-
-        # Save data in database
-        self.db.commit()
 
         # Clear fields
-        book_title = self.lineEdit_9.clear()
-        book_description = self.textEdit_3.clear()
-        book_price = self.lineEdit_48.clear()
-        book_code = self.lineEdit_12.clear()
-        book_part_order = self.lineEdit_51.clear()
+        self.lineEdit_9.clear()
+        self.textEdit_3.clear()
+        self.lineEdit_48.clear()
+        self.lineEdit_12.clear()
+        self.lineEdit_51.clear()
 
-        book_category = self.comboBox_5.setCurrentIndex(0)
-        book_publisher = self.comboBox_13.setCurrentIndex(0)
-        book_author = self.comboBox_10.setCurrentIndex(0)
-        book_status = self.comboBox_12.setCurrentIndex(0)
+        self.comboBox_5.setCurrentIndex(0)
+        self.comboBox_13.setCurrentIndex(0)
+        self.comboBox_10.setCurrentIndex(0)
+        self.comboBox_12.setCurrentIndex(0)
 
 
         # Notification
-        # print("Deleted !!") 
         self.statusBar().showMessage("Deleted !!") # Notification
 
         # Refreash Data
         self.Show_All_Books()
 
 
-
-    #################################################
-    #### Clients
-    # Show data in client table
-    def Show_All_Clients(self):
-        
-        # Get Data from Database.
-        self.cur.execute("select name, mail, phone, national_id, date   from clients")
-        data = self.cur.fetchall()
-
-        # Insert data into table
-        for row , form in enumerate(data):
-            # Insert new Row
-            row_position = self.tableWidget_5.rowCount()
-            if row_position <= row:
-                self.tableWidget_5.insertRow(row_position)
-
-            for col, item in enumerate(form):
-                self.tableWidget_5.setItem(row, col, QTableWidgetItem(str(item)) )
-                col+=1 # to new column
-
-            
-
-        # Notification
-        print("Show All Clients Done")
-
-    # Add New Client & Save changes in database.
-    def Add_New_Client(self):
-        
-        # Get Data from Fields
-        client_name = self.lineEdit_13.text()
-        client_mail = self.lineEdit_14.text()
-        client_phone = self.lineEdit_16.text()
-        client_national_id = self.lineEdit_18.text()
-
-        self.cur.execute("select * from clients")
-        id = len( self.cur.fetchall() ) +1
-        date = datetime.now().strftime('%d-%m-%Y %H:%M')
-
-        # Check is There another id same and fix it
-        self.cur.execute("select * from clients where id = '{}'".format(id))
-        count_id = len( self.cur.fetchall() )
-        
-        if count_id > 0:
-            id+=1
-
-
-
-        # Load Data to Database
-        data = [
-            (id, client_name, client_mail, client_phone, date, client_national_id)
-        ]
-        self.cur.executemany("insert into clients values(?,?,?,?,?,?)",data)        
-
-        # Add this Actions in History
-        # Generate History id
-        self.cur.execute("select * from history")
-        history_id = len( self.cur.fetchall() ) +1
-        # date = datetime.now()
-
-
-        # Check is There another id same and fix it
-        self.cur.execute("select * from books where id = '{}'".format(history_id))
-        count_id = len( self.cur.fetchall() )
-        
-        if count_id > 0:
-            history_id+=1
-
-        self.cur.executemany("insert into history values (?,?,?,?,?,?)",[(
-            history_id, employee_id, "Add Client", date, branch_id, client_name
-        )])
-
-        # Save data in database
-        self.db.commit()
-
-
-        # Clear Fields
-        client_name = self.lineEdit_13.clear()
-        client_mail = self.lineEdit_14.clear()
-        client_phone = self.lineEdit_16.clear()
-        client_national_id = self.lineEdit_18.clear()
-
-
-        # Notification
-        print("Client "+str(client_name)+" Added!")
-        self.Show_All_Clients()
-
-
-        
-
-
-    def Edit_Client_Search(self):
-        
-        # Get Client data to search via
-        client_data = str(self.lineEdit_21.text()) # Here Data text what i will search via.
-
-        # Check is there last search !!
-        if ( len(self.lineEdit_17.text()) > 0 ) : # is not empty  --> Here i take client name feild to check
-            
-            # Clear Feilds
-            self.lineEdit_17.clear() # name
-            self.lineEdit_15.clear() # mail
-            self.lineEdit_20.clear() # phone
-            self.lineEdit_19.clear() # nationa ID
-
-        
-        # Get filter search
-        filter = self.comboBox_37.currentIndex()
-        filter_name = ""
-
-        if filter == 0:
-            filter_name = "name"
-
-        elif filter == 1:
-            filter_name = "mail"
-            
-        elif filter == 2:
-            filter_name = "phone"
-
-        else:
-            filter_name = "national_id"
-
-
-        # Check if client data dield is empty
-        if len(client_data) <= 0:
-            print("Please Enter Client Data to Search !!") # Notification
-
-        else : # is not Empty
-
-            # Search in database using filter code
-            sql = "select * from clients where {0} = '{1}'" 
-            sql = sql.format(filter_name, client_data)
-            self.cur.execute(sql)
-
-            data_lenghth = len( self.cur.fetchall() ) # how many data here
-
-            if data_lenghth == 0 : # is it not in database
-                self.statusBar().showMessage("There is no Client with this {} data !".format(client_data)) # Notification
-
-            else : # if Founded
-                
-                sql = "select * from clients where {0} = '{1}'" 
-                sql = sql.format(filter_name, client_data)
-                
-                
-                self.cur.execute(sql)
-                data = self.cur.fetchone()                 
-
-                # Load data to fields
-                client_name = self.lineEdit_17.setText(data[1])
-                client_mail = self.lineEdit_15.setText(data[2])
-                client_phone = self.lineEdit_20.setText(data[3])
-                client_national_id = self.lineEdit_19.setText(str(data[5]))
-
-                # Notification
-                print("Search Done !!")
-
-
-
-    def Save_Edit_Client(self):
-        # Get Data from Fields
-        client_name = self.lineEdit_17.text()
-        client_mail = self.lineEdit_15.text()
-        client_phone = self.lineEdit_20.text()
-        client_national_id = self.lineEdit_19.text()
-
-
-        
-
-
-        # Get client id from database
-        client_data = str(self.lineEdit_21.text()) # Here Data text what i will search via.
-
-        # Get filter search
-        filter = self.comboBox_37.currentIndex()
-        filter_name = ""
-
-        if filter == 0:
-            filter_name = "name"
-
-        elif filter == 1:
-            filter_name = "mail"
-            
-        elif filter == 2:
-            filter_name = "phone"
-
-        else:
-            filter_name = "national_id"
-
-        self.cur.execute("select * from clients where {0} = '{1}'".format(filter_name, client_data))
-        id  = self.cur.fetchone()[0]
-
-        print(id)
-
-        # Update to database
-        sqle = """update clients 
-                set name = '{0}',
-                mail = '{1}',
-                phone = '{2}',
-                national_id = {3}
-                where id = {4}"""
-        sqle = sqle.format(
-            client_name, client_mail, client_phone, client_national_id,
-            id
-            )
-        
-        self.cur.execute(sqle)
-
-
-        # Add this Actions in History
-        # Generate History id
-        self.cur.execute("select * from history")
-        history_id = len( self.cur.fetchall() ) +1
-        date = datetime.now().strftime('%d-%m-%Y %H:%M')
-
-
-        # Check is There another id same and fix it
-        self.cur.execute("select * from books where id = '{}'".format(history_id))
-        count_id = len( self.cur.fetchall() )
-        
-        if count_id > 0:
-            history_id+=1
-
-        self.cur.executemany("insert into history values (?,?,?,?,?,?)",[(
-            history_id, employee_id, "Edit Client", date, branch_id, client_name
-        )])
-
-        # Save data in database
-        self.db.commit()
-
-
-        # Notifications
-        message = "The Cleint {} was updated !".format(client_name)
-        print(message)
-        self.statusBar().showMessage(message)
-
-
-
-    def Delete_Client(self):
-        
-
-        # Get client id from database
-        client_data = str(self.lineEdit_21.text()) # Here Data text what i will search via.
-        name = self.lineEdit_17.text()
-
-        # Get filter search
-        filter = self.comboBox_37.currentIndex()
-        filter_name = ""
-
-        if filter == 0:
-            filter_name = "name"
-
-        elif filter == 1:
-            filter_name = "mail"
-            
-        elif filter == 2:
-            filter_name = "phone"
-
-        else:
-            filter_name = "national_id"
-
-        self.cur.execute("select * from clients where {0} = '{1}'".format(filter_name, client_data))
-        id  = self.cur.fetchone()[0]
-
-
-        print(id)
-
-        # Now Delete it
-        self.cur.execute("delete from clients where id = '{}'".format(id))
-
-        
-
-
-        # Add this Actions in History
-        # Generate History id
-        self.cur.execute("select * from history")
-        history_id = len( self.cur.fetchall() ) +1
-        date = datetime.now().strftime('%d-%m-%Y %H:%M')
-
-
-        # Check is There another id same and fix it
-        self.cur.execute("select * from books where id = '{}'".format(history_id))
-        count_id = len( self.cur.fetchall() )
-        client_name = self.lineEdit_17.text()
-
-        
-        if count_id > 0:
-            history_id+=1
-
-        self.cur.executemany("insert into history values (?,?,?,?,?,?)",[(
-            history_id, employee_id, "Delete Client", date, branch_id, client_name
-        )])
-
-        # Save data in database
-        self.db.commit()
-
-        # Now Clear Feilds
-        client_name = self.lineEdit_17.clear()
-        client_mail = self.lineEdit_15.clear()
-        client_phone = self.lineEdit_20.clear()
-        client_national_id = self.lineEdit_19.clear()
-
-        client_data = self.lineEdit_21.clear()
-
-
-        # Now Show a Notifications
-        message = "The Cleint {} was deleted !".format(name)
-        print(message)
-        self.statusBar().showMessage(message)
-
-
-
-    ###############################################################
-    #### Hitory
-    # Shoe the data from table history in database to history tap in gui
-    def Show_Hitory(self):
-        # Get data from database
-        self.cur.execute("select employee, actions, branch_id, date from history")
-        data = self.cur.fetchall()
-
-        # Insert data into table
-        for row , form in enumerate(data):
-            # Insert new Row
-            row_position = self.tableWidget_6.rowCount()
-            if row_position <= row:
-                self.tableWidget_6.insertRow(row_position)
-
-            for col, item in enumerate(form):
-                self.tableWidget_6.setItem(row, col, QTableWidgetItem(str(item)) )
-                col+=1 # to new column
-
-        print("Show_Hitory Done!")
-
-
-
-    ###############################################################
-    #### Books Reports
-    
-    def Show_All_Book_Reports(self):
-        #### Get date from fields
-        # Get Qdatetime[dt] atribute from this code --> self.dateTimeEdit.dateTime()
-        from_date = str( self.dateTimeEdit.textFromDateTime( self.dateTimeEdit.dateTime() ) ).replace("/","-")
-        to_date = str( self.dateTimeEdit_2.textFromDateTime( self.dateTimeEdit_2.dateTime() ) ).replace("/","-")
-        
-        print("from_date "+ from_date)
-        print("to_date "+ to_date)
-
-        # Get data from table books in database 
-        self.cur.execute("select code, title, category_id, author_id from books")
-        data = self.cur.fetchall()
-        print(data)
-
-        # Get Books names from data
-        books = []
-        for book in data:
-            books.append(book[1])
-
-        print("bboks:"+str(books))
-
-        
-        # Get Branchies
-        branchies = []
-        for book in books:
-            rent = book+" Rent"
-            retrieve = book+" Retrieve"
-
-            # Get branchies from database
-            self.cur.execute("select branch_id from history where extra = '{}' or extra = '{}'".format(rent, retrieve))
-            branchies_db = self.cur.fetchall()
-
-            # Generata branchies & Quantity
-            for branch in branchies_db:
-                if branch[0] not in branchies:
-                    branchies.append( (branch[0]) )
-                
-
-        # Generata table fields
-        row_position = len(books) #*len(branchies)
-        row_count = self.tableWidget_7.rowCount()
-        if row_count==0:
-            for i in range(row_position):
-                self.tableWidget_7.insertRow(i)
-
-
-        in_row = 0; temp=0
-        for row , form in enumerate(data):
-            book_title=""
-            print("bran : "+str(branchies[row]))
-
-            # Calculate
-            # Rent
-            self.cur.execute("select id from history where extra = '{}' and branch_id = {}".format(books[row]+" Rent", branchies[row]))
-            rent_sum = len( self.cur.fetchall() )
-            # Retrieve
-            self.cur.execute("select id from history where extra = '{}' and branch_id = {}".format(books[row]+" Retrieve", branchies[row]))
-            retrieve_sum = len( self.cur.fetchall() )
-            
-            
-
-            # Insert new Row
-            for col, item in enumerate(form):
-                if col == 1:
-                    self.tableWidget_7.setItem(row+in_row, col, QTableWidgetItem(str( data[row][col] )) )
-                # Get real data name for category and author
-                elif col == 2:
-                    self.cur.execute("select category_name from category where id = '{}'".format(data[row][2]))
-                    self.tableWidget_7.setItem(row+in_row, col, QTableWidgetItem(str(self.cur.fetchone()[0])) )
-                
-                elif col == 3:
-                    self.cur.execute("select name from author where id = '{}'".format(data[row][3]))
-                    self.tableWidget_7.setItem(row+in_row, col, QTableWidgetItem(str(self.cur.fetchone()[0])) )
-
-
-                else:
-                    self.tableWidget_7.setItem(row+in_row, col, QTableWidgetItem(item) )
-                    
-                    # Get Quantity
-                    book_title = data[row][1]
-                    print("boook="+book_title)
-                    self.cur.execute("select quantity from books where title = '{}' and Branch = '{}'".format(
-                        book_title, branchies[row]))
-                    # Quantity
-                    quantity = self.cur.fetchone()[0]
-                    print("quantity:"+str(quantity))
-                    quantity = (quantity-rent_sum)+retrieve_sum
-                    self.tableWidget_7.setItem(row+in_row, 5, QTableWidgetItem(str(quantity)) )
-
-                    self.tableWidget_7.setItem(row+in_row, 4, QTableWidgetItem(str(branchies[row])) )
-
-
-                col+=1 # to new column
-        # for i in branchies:
-            
-            
-            
-            
-        #     # Insert data into table
-        #     for row , form in enumerate(data):
-        #         book_title=""
-        #         print("bran : "+str(i))
-
-        #         # Calculate
-        #         # Rent
-        #         self.cur.execute("select id from history where extra = '{}' and branch_id = {}".format(books[row]+" Rent", i))
-        #         rent_sum = len( self.cur.fetchall() )
-        #         # Retrieve
-        #         self.cur.execute("select id from history where extra = '{}' and branch_id = {}".format(books[row]+" Retrieve", i))
-        #         retrieve_sum = len( self.cur.fetchall() )
-                
-                
-
-        #         # Insert new Row
-        #         for col, item in enumerate(form):
-        #             if col == 1:
-        #                 self.tableWidget_7.setItem(row+in_row, col, QTableWidgetItem(str( data[row][col] )) )
-        #             # Get real data name for category and author
-        #             elif col == 2:
-        #                 self.cur.execute("select category_name from category where id = '{}'".format(data[row][2]))
-        #                 self.tableWidget_7.setItem(row+in_row, col, QTableWidgetItem(str(self.cur.fetchone()[0])) )
-                    
-        #             elif col == 3:
-        #                 self.cur.execute("select name from author where id = '{}'".format(data[row][3]))
-        #                 self.tableWidget_7.setItem(row+in_row, col, QTableWidgetItem(str(self.cur.fetchone()[0])) )
-
-
-        #             else:
-        #                 self.tableWidget_7.setItem(row+in_row, col, QTableWidgetItem(item) )
-                        
-        #                 # Get Quantity
-        #                 book_title = data[row][1]
-        #                 print("boook="+book_title)
-        #                 self.cur.execute("select quantity from books where title = '{}' and Branch = '{}'".format(
-        #                     book_title, i))
-        #                 # Quantity
-        #                 quantity = self.cur.fetchone()[0]
-        #                 print("quantity:"+str(quantity))
-        #                 quantity = (quantity-rent_sum)+retrieve_sum
-        #                 self.tableWidget_7.setItem(row+in_row, 5, QTableWidgetItem(str(quantity)) )
-
-        #                 self.tableWidget_7.setItem(row+in_row, 4, QTableWidgetItem(str(i)) )
-
-
-        #             col+=1 # to new column
-        #         # Row
-        #         temp=row
-
-        #     # Zehahahah
-        #     in_row+=temp+1
-
-
-
-
-
-    def All_Books_Reports(self):
-        
-
-        # Load data into excel file
-        file_date = datetime.now().strftime('%d of %m')
-
-        excel_file = Workbook('All Book Export Report ('+str( file_date )+' ).xlsx')
-        sheet1 = excel_file.add_worksheet()
-
-        # Add Formats
-        bold = excel_file.add_format({'bold':1})
-        
-        # Format Columns
-        sheet1.set_column(1,3,18)
-
-        # Set Headers
-        sheet1.write('A1','Book Code', bold)
-        sheet1.write('B1','Book Title', bold)
-        sheet1.write('C1','Category', bold)
-        sheet1.write('D1','Author', bold)
-        sheet1.write('E1','Branch', bold)
-        sheet1.write('F1','Quantity', bold)
-
-        # Insert data from database to excel file
-        # Get row, column counts
-        rowCount = self.tableWidget_7.rowCount()
-        columnCount = self.tableWidget_7.columnCount()
-
-        # Loop through that numbers
-        sheetRow=0
-        for row in range(rowCount):
-            sheetRow+=1
-            for col in range(columnCount):
-                data = self.tableWidget_7.item(row, col).text()
-                sheet1.write(sheetRow, col, data)
-
-        # Close Excel file to save
-        excel_file.close()
-
-
-
-
-    # This for book tab
+    # This to export a list of books which in the screen in gui.
     def Book_Export_Report(self):
         """Export book's list to an Excel file."""
 
@@ -1164,380 +717,594 @@ class Main(QMainWindow , MainUI):
 
 
 
-    ###############################################################
-    #### Clients Reports
+    """==============================================================================
+    ================================== Clients Tab Functions ==============================="""
     
-    def Show_All_Client_Reports(self):
-        # Get data
-        self.cur.execute("select name, mail, phone, national_id from clients")
-        data = self.cur.fetchall()
-
-        # get client's book
-        books = []
-        for client in data:
-            
-            self.cur.execute("select book_id from daily_movments where client_id = {}".format(client[3]))
-            books.append( len(self.cur.fetchall()) )
-        print(books)
+    # Show data in client table
+    def Show_All_Clients(self):
         
+        # Variables
+        tableName = self.tableWidget_5
+
+        # Get Data from Database.
+        clientsData = database.getAll("select name, mail, phone, national_id, date from clients")
+
         # Insert data into table
-        for row , form in enumerate(data):
-            # Insert new Row
-            row_position = self.tableWidget_8.rowCount()
-            if row_position <= row:
-                self.tableWidget_8.insertRow(row_position)
-
-            for col, item in enumerate(form):
-                if col==3:
-                    self.tableWidget_8.setItem(row, col, QTableWidgetItem(str(books[row])) )
-                else:    
-                    self.tableWidget_8.setItem(row, col, QTableWidgetItem(str(item)) )
-                col+=1 # to new column        
-
-    def All_Clients_Reports(self):
-
-        # Load data into excel file
-        file_date = datetime.now().strftime('%d of %m')
-
-        excel_file = Workbook('All Client Export Report ('+str( file_date )+' ).xlsx')
-        sheet1 = excel_file.add_worksheet()
-
-        # Add Formats
-        bold = excel_file.add_format({'bold':1})
+        Tools.showDataInTable(tableName, clientsData)
         
-        # Format Columns
-        sheet1.set_column(0,2,18)
+    # Add New Client & Save changes in database.
+    def getClientDataFields(self): # Helpful tool
+        """Get the fields's data from screen in tab add new client.\n
+        return Dictionary of objects in this order\n
+        <name, mail, phone, id>"""
 
-        # Set Headers
-        sheet1.write('A1','Name', bold)
-        sheet1.write('B1','Mail', bold)
-        sheet1.write('C1','Phone', bold)
-        sheet1.write('D1','Book', bold)
+        # Get Data from Fields
+        client_name = self.lineEdit_13
+        client_mail = self.lineEdit_14
+        client_phone = self.lineEdit_16
+        client_national_id = self.lineEdit_18
+
+        return {'name':client_name, 'mail':client_mail, 'phone':client_phone, 'id':client_national_id}
+        
+    # Tool --> clean fields.    
+    def clearClientFields(self): # Helpful tool
+        """Clear the field from data in add new client tab."""
+        # Clear Fields
+        self.lineEdit_13.clear()
+        self.lineEdit_14.clear()
+        self.lineEdit_16.clear()
+        self.lineEdit_18.clear()
+
+    # Add new client to system.
+    def Add_New_Client(self):
+        """add new client in system."""
+        # Variables.
+        objectsName = self.getClientDataFields()
+        cleintName = objectsName['name'].text()
+        
+        # Run
+        runScript = TabWidget.ClientTab().addNewClient(objectsName)
+        
+        if runScript == True:
+
+            # Save action to history
+            if branch_id == adminAccess or employee_id == adminAccess:
+                thisData = {'employee id':"Admin", 'branch id':"Admin", 'action':"Add new client", 'extra':cleintName} 
+            else:
+                thisData = {'employee id':employee_id, 'branch id':branch_id, 'action':"Add new client", 'extra':cleintName} 
+
+            Tools.SaveActionToHistory(thisData)
+           
+
+            # Notification.
+            self.statusBar().showMessage("Clinet {} added Successfuly !!".format(cleintName))
+
+            # Clean Screen.
+            self.clearClientFields()
+
+        # Refreash.
+        self.Show_All_Clients()
+
+    # Hanlde Search Bar.
+    def SearchAboutClient(self):
+        """Search by name, phone, mail, or id"""
+
+        # GET Search Text.
+        searchText = self.lineEdit_46.text()
+        table = self.tableWidget_5
+
+        # Run 
+        TabWidget.ClientTab().getSearchData({'search text':searchText, 'table':table})
+
+        # Notification
+        self.statusBar().showMessage("Data Loaded to Screen !!") 
+
+    # Load data to Fields.
+    def loadClientDataToEditsFields(self, clientData): # Tool
+        """take a data then load id in their fields in edit clien tab."""
+        # Variables and indexies.
+        nameIndx = 0
+        mailIndx = 1
+        phoneIndx = 2
+        idIndx = 3
+
+        # Load data to fields
+        clientName = self.lineEdit_17.setText(clientData[nameIndx])
+        clientMail = self.lineEdit_15.setText(clientData[mailIndx])
+        clientPhone = self.lineEdit_20.setText(clientData[phoneIndx])
+        clientID = self.lineEdit_19.setText(str(clientData[idIndx]))
+
+        # Notification
+        self.statusBar().showMessage("Client data loaded successfuly !!") 
+
+    # Hable Search bar in Edit client Tab.
+    def Edit_Client_Search(self):
+        """Search about client by one if his data then load his data to be editable."""
+
+        # Variables.
+        searchText = self.lineEdit_21.text()
+        run = True
+
+        # Check Field.
+        if Tools.checkFields({'search text':searchText}) == False:
+            run = False
+            
+
+        # Run.
+        if run == True:
+
+            # Get data.
+            clientData = TabWidget.ClientTab().loadCleintDataToEdit(searchText)
+
+            # Load in Fields.
+            if len(clientData) != empty:
+                self.loadClientDataToEditsFields(clientData)
+
+
+
+        # # Get Client data to search via
+        # client_data = str(self.lineEdit_21.text()) # Here Data text what i will search via.
+
+        # # Check is there last search !!
+        # if ( len(self.lineEdit_17.text()) > 0 ) : # is not empty  --> Here i take client name feild to check
+            
+        #     # Clear Feilds
+        #     self.lineEdit_17.clear() # name
+        #     self.lineEdit_15.clear() # mail
+        #     self.lineEdit_20.clear() # phone
+        #     self.lineEdit_19.clear() # nationa ID
+
+        
+        # # Get filter search
+        # filter = self.comboBox_37.currentIndex()
+        # filter_name = ""
+
+        # if filter == 0:
+        #     filter_name = "name"
+
+        # elif filter == 1:
+        #     filter_name = "mail"
+            
+        # elif filter == 2:
+        #     filter_name = "phone"
+
+        # else:
+        #     filter_name = "national_id"
+
+
+        # # Check if client data dield is empty
+        # if len(client_data) <= 0:
+        #     print("Please Enter Client Data to Search !!") # Notification
+
+        # else : # is not Empty
+
+        #     # Search in database using filter code
+        #     sql = "select * from clients where {0} = '{1}'" 
+        #     sql = sql.format(filter_name, client_data)
+        #     self.cur.execute(sql)
+
+        #     data_lenghth = len( self.cur.fetchall() ) # how many data here
+
+        #     if data_lenghth == 0 : # is it not in database
+        #         self.statusBar().showMessage("There is no Client with this {} data !".format(client_data)) # Notification
+
+        #     else : # if Founded
+                
+        #         sql = "select * from clients where {0} = '{1}'" 
+        #         sql = sql.format(filter_name, client_data)
+                
+                
+        #         self.cur.execute(sql)
+        #         data = self.cur.fetchone()                 
+
+        #         # Load data to fields
+        #         client_name = self.lineEdit_17.setText(data[1])
+        #         client_mail = self.lineEdit_15.setText(data[2])
+        #         client_phone = self.lineEdit_20.setText(data[3])
+        #         client_national_id = self.lineEdit_19.setText(str(data[5]))
+
+        #         # Notification
+        #         print("Search Done !!")
+
+    # Tool --> get cleint's id.
+    def getClientIdFromSearch(self,nationalID): # Tool
+        """Get cleint id in database ans used in system."""
+
+        id = database.getOne("select id from clients where national_id = {}".format(nationalID))
+
+        return int(id[0])
+
+    # Tool --> to get data from Fields in Edit client tab.
+    def getEditableClientData(self): # Tool
+        """Get Edits data from fields in edit client data tab.\n
+        then return data as dictionary data type in this Keys order-->\n
+        <id, name, mail, phone, national id>"""
+
+        # __inti__
+        canRun = True
+
+
+        # Get Data from Fields
+        clientName = self.lineEdit_17.text()
+        clientMail = self.lineEdit_15.text()
+        clientPhone = self.lineEdit_20.text()
+        clientID = self.lineEdit_19.text()
+
+        # Check 
+        checkResult = Tools.checkFields({'client name':clientName,
+                           'client mail':clientMail,
+                           'client phone':clientPhone,
+                           'client id':clientID})
+        if checkResult == False:
+            canRun = False
+        
+        # Run.
+        if canRun==True:
+            id = self.getClientIdFromSearch(clientID)
+
+            # Return.
+            return {'id':id, 'name':clientName, 'mail':clientMail, 'phone':clientPhone, 'national id':int(clientID)}
+        else:
+            return {}
+    
+    # Commit changes in Edit Client tab.
+    def Save_Edit_Client(self):
+        """Submit and Save the changes."""
+        # __inti__
+        canRun = True
+
+        # Variables.
+        clientData = self.getEditableClientData()
+        cleintName = clientData['name']
+
+        
+        # Check and Kick.
+        if len(clientData) == empty:
+            canRun = False
+
+        # Run.
+        if canRun == True:
+            TabWidget.ClientTab().updateClientData(clientData)
+
+            # Notification.
+            self.statusBar().showMessage("Clinet {} updated successfuly !!".format(cleintName))
+
+            # Save Action.
+            if branch_id==adminAccess or employee_id==adminAccess:
+                thisData = {'action':'update cleint', 'extra':cleintName, 'branch id':"admin", 'employee id':"admin"}
+            
+            else:
+                thisData = {'action':'update cleint', 'extra':cleintName, 'branch id':branch_id, 'employee id':employee_id}
+            
+            Tools.SaveActionToHistory(thisData)
+            
+            # Refresh.
+            self.Show_All_Clients()
+
+    # Tool --> clean fields.
+    def clearEditClientDataFields(self): # Tool
+        """clear the fields from data in edit client tab."""
+
+        # Now Clear Feilds
+        self.lineEdit_17.clear()
+        self.lineEdit_15.clear()
+        self.lineEdit_20.clear()
+        self.lineEdit_19.clear()
+        self.lineEdit_21.clear()
+
+    # Delete Client from System.
+    def Delete_Client(self):
+        """delete a cleint from database."""
+        # __inti__
+        canRun = True
+
+        # Variables.
+        clientData = self.getEditableClientData()
+        id = clientData['id']
+        cleintName = clientData['name']
+
+        # Check and Kick.
+        if len( clientData ) == empty:
+            canRun = False
+        
+        # Run.
+        if canRun==True:
+            
+            # Delete.
+            database.deleteData("delete from clients where id = {}".format(id))
+
+            # Save Action in History.
+            if branch_id == adminAccess or employee_id == adminAccess:
+                thisData = {'action':'delete client', 'extra':cleintName, 'branch id':"admin", 'employee id': "admin"}
+            else:
+                thisData = {'action':'delete client', 'extra':cleintName, 'branch id':branch_id, 'employee id': employee_id}
+            
+            Tools.SaveActionToHistory(thisData)
+
+            # Notification.
+            self.statusBar().showMessage("Clinet Deleted Successfuly !!")
+
+            # Clean.
+            
+            self.clearEditClientDataFields()
+
+        # Refreash.
+        self.tableWidget_5.clearContents()
+        self.Show_All_Clients()
+        
+        # # Get client id from database
+        # client_data = str(self.lineEdit_21.text()) # Here Data text what i will search via.
+        # name = self.lineEdit_17.text()
+
+        # # Get filter search
+        # filter = self.comboBox_37.currentIndex()
+        # filter_name = ""
+
+        # if filter == 0:
+        #     filter_name = "name"
+
+        # elif filter == 1:
+        #     filter_name = "mail"
+            
+        # elif filter == 2:
+        #     filter_name = "phone"
+
+        # else:
+        #     filter_name = "national_id"
+
+        # self.cur.execute("select * from clients where {0} = '{1}'".format(filter_name, client_data))
+        # id  = self.cur.fetchone()[0]
+
+
+        # print(id)
+
+        # # Now Delete it
+        # self.cur.execute("delete from clients where id = '{}'".format(id))
+
         
 
-        # Insert data from database to excel file
-        # Get row, column counts
-        rowCount = self.tableWidget_8.rowCount()
-        columnCount = self.tableWidget_8.columnCount()
 
-        # Loop through that numbers
-        sheetRow=0
-        for row in range(rowCount):
-            sheetRow+=1
-            for col in range(columnCount):
-                data = self.tableWidget_8.item(row, col).text()
-                sheet1.write(sheetRow, col, data)
-
-        # Close Excel file to save
-        excel_file.close()
+        # # Add this Actions in History
+        # # Generate History id
+        # self.cur.execute("select * from history")
+        # history_id = len( self.cur.fetchall() ) +1
+        # date = datetime.now().strftime('%d-%m-%Y %H:%M')
 
 
-    def Clinets_Filter_Report(self):
-        pass
+        # # Check is There another id same and fix it
+        # self.cur.execute("select * from books where id = '{}'".format(history_id))
+        # count_id = len( self.cur.fetchall() )
+        # client_name = self.lineEdit_17.text()
 
-    def Client_Export_Report(self):
-        pass
+        
+        # if count_id > 0:
+        #     history_id+=1
+
+        # self.cur.executemany("insert into history values (?,?,?,?,?,?)",[(
+        #     history_id, employee_id, "Delete Client", date, branch_id, client_name
+        # )])
+
+        # # Save data in database
+        # self.db.commit()
+
+        # # Now Clear Feilds
+        # client_name = self.lineEdit_17.clear()
+        # client_mail = self.lineEdit_15.clear()
+        # client_phone = self.lineEdit_20.clear()
+        # client_national_id = self.lineEdit_19.clear()
+
+        # client_data = self.lineEdit_21.clear()
 
 
+        # # Now Show a Notifications
+        # message = "The Cleint {} was deleted !".format(name)
+        # print(message)
+        # self.statusBar().showMessage(message)
 
-    ###############################################################
-    #### Employee Reports
+    # Export List of The Clients in the System.
+    def ExportListOfClients(self):
+        """Export all clients in list to an excel file."""
 
-    def Show_Employee_Report(self):
+        ExcelFiles.ClientReports().exportClientsList()
+        print("exported!!")
+       
+
+    """======================================================================================
+    ================================ Dashbourd Tab Functions ============================="""
+    # Open a Dialog Window and choose Picture.
+    def getPicture(self, pixmap, label):
+        
+        # Open Dialog and Get Picture
+        imgName = QFileDialog.getOpenFileName(self, "Get the Image", "/home/izy/Desktop/Library System", "All Files (*);;PNG Files (*.png)")
+
+        # Open The Image this run
+        pixmap = QPixmap(imgName[0])
+
+        # Add Image to Label
+        label.setPixmap(pixmap)
+
+        # Output.
+        return imgName
+
+    # Choose image.
+    def chooseImageForBranch(self):
+
+        # Variables.
+        pixmap = self.pixmap
+        label = self.label_97
+
+        # Run.
+        image = self.getPicture(pixmap, label)
+
+        # Save.
+        global systemImage
+        systemImage = image
+
+    # Load information data.
+    def LoadSystemInformation(self):
+        """get branch data ,  image , admin data, system data."""
+
+        # Picture.
+        self.pixmap = QPixmap(systemImage)
+        self.label_97.setPixmap(self.pixmap)
+
+        # Variables.
+        thisObjects = {
+            'branch':branch_id,
+            'name':self.label_93,
+            'location':self.label_90,
+            'admin':self.label_95,
+            'title':self.label_44,
+            
+            'rent':self.label_113,
+            'retrieve':self.label_25,
+            'total':self.label_26,
+            'books':self.label_27,
+            'clients':self.label_28,
+            'visitors':self.label_29,
+            'income':self.label_33,
+            'outcome':self.label_42,
+        }
+
+        # Run.
+        TabWidget.DashbourdTab().loadBranchData(thisObjects)
+    """======================================================================================
+    ================================ History Tab Functions ================================"""
+    
+    # Show the data from database to history tap in gui
+    def Show_History(self):
+
+        # Variables.
+        table = self.tableWidget_6
+
         # Get data from database
-        self.cur.execute("select employee, id, actions, date, branch_id from history")
-        data = self.cur.fetchall()
-        print("Employee_Report")
-      
+        hitory = database.getAll("select employee, actions, branch_id, date, extra from history")
 
-        # Get data 
-        national_id = 0
-        new_data = []
-        rent=0; Retrieve=0; 
-        add_book=0; edit_book =0;delete_book=0;
-        add_client=0; edit_client=0; delete_client=0;
+        # Insert data into table
+        Tools.showDataInTable(table, hitory)
 
+    # Search in history table.
+    def searchInHistory(self):
+        """Search in history table by employee, branch, action, date or extra."""
+        # __inti__
+        canRun = True
 
+        # Variable.
+        searchText = self.lineEdit_3.text()
+        table = self.tableWidget_6
+
+        # Check and Kick.
+        if len(searchText) == empty:
+            print("Please Enter a Data First.")
+            canRun = False
         
-        # Get Employee name
-        employeies = []
-        for item in data:
+        # Run.
+        if canRun==True:
+            TabWidget.HistoryTab().getSearchAboutText(searchText, table)
 
-            if item[0] not in employeies and item[0]!='0':
-                employeies.append( (item[0]) )
+    # Export List of Action to Excel File.
+    def ExportListOfActions(self):
+        """Exported from history table to excel file."""
 
-        print("employeies ",end=" ")
-        print(employeies)
+        # Run.
+        ExcelFiles.HistoryReports().exportList()
 
-        # Get employee's actions
-        actions = {}
-        row = 0
-
-        for i in employeies:
-            # Clear last data
-            temp=row
-            rent=0; retrieve=0; 
-            add_book=0; edit_book =0;delete_book=0;
-            add_client=0; edit_client=0; delete_client=0;
-
-            # Get actions
-            self.cur.execute("select actions from history where employee like '{}'".format(i))
-            actions_db = self.cur.fetchall()
-            
-            # generate data
-            for act in actions_db:
-                
-                if act[0]=='Rent':
-                    rent = actions_db.count(act)
-                
-                elif act[0]=='Retrieve':
-                    retrieve = actions_db.count(act)
-
-                elif act[0]=='Add Book':
-                    add_book = actions_db.count(act)
-
-                elif act[0]=='Edit Book':
-                    edit_book = actions_db.count(act)
-
-                elif act[0]=='Delete Book':
-                    delete_book = actions_db.count(act)
-
-                elif act[0]=='Add Client':
-                    add_client = actions_db.count(act)
-
-                elif act[0]=='Edit Client':
-                    edit_client = actions_db.count(act)
-
-                elif act[0]=='Delete Client':
-                    delete_client = actions_db.count(act)
-
-            # insert data in dic
-            actions = {
-                'name':i,
-                'Rent':rent, 'Retrieve':retrieve,
-                'Add Book':add_book, 'Edit Book':edit_book, 'Delete Book':delete_book,
-                'Add Client':add_client, 'Edit Client':edit_client, 'Delete Client':delete_client
-            }
-
-            print(actions)
-            
-            # Simple algorithm to get row count
-            count=0 #counter
-            for act in actions.values():
-                
-                if act!= actions['name'] :
-                    if act>0:
-                        count+=1
-            print("count:"+str(count))
-
-            # Get national id
-            self.cur.execute("select national_id from employee where name like '%{}%'".format(i))
-            national_id = self.cur.fetchone()[0]
-
-            print("id:"+str(national_id))
+        # Notification.
+        print("Exported.")
 
 
 
-            # Generata table fields
-            row_count = self.tableWidget_10.rowCount()
-            if row_count==temp:
-                for rw in range(count):
-                    rw+=temp
-                    self.tableWidget_10.insertRow(temp)
 
 
 
-            # Insert data into table
-            here=1
-            for act in actions.values():
-                print("act="+str(act))
-                print("here="+str(here))
-                if act==actions['name']:
-                    continue
-                elif act==0:
-                    here+=1
-
-                
-                if act==actions['Rent'] and act!=0 and here==1:
-                    self.tableWidget_10.setItem(row, 0, QTableWidgetItem(str(i)) )
-                    self.tableWidget_10.setItem(row, 1, QTableWidgetItem(str(national_id)) )
-                    self.tableWidget_10.setItem(row, 2, QTableWidgetItem('Rent : '+str(act)) )
-                    
-                    
-                    self.cur.execute("select date ,branch_id from history where employee like '%{}%' and actions like '%{}%'".format(i, 'Rent'))
-                    other = self.cur.fetchone()
-
-                    self.tableWidget_10.setItem(row, 3, QTableWidgetItem(str( other[0] )) )
-                    self.tableWidget_10.setItem(row, 4, QTableWidgetItem(str( other[1] )) )
-                    
-                    row+=1
-                    here+=1
-                
-                
-                elif act==actions['Retrieve'] and act!=0 and here==2:
-                    self.tableWidget_10.setItem(row, 0, QTableWidgetItem(str(i)) )
-                    self.tableWidget_10.setItem(row, 1, QTableWidgetItem(str(national_id)) )
-                    self.tableWidget_10.setItem(row, 2, QTableWidgetItem('Retrieve : '+str(act)) )
-                    
-                    self.cur.execute("select date ,branch_id from history where employee = '{}' and actions = '{}'".format(i, 'Retrieve'))
-                    other = self.cur.fetchone()
-                    
-                    self.tableWidget_10.setItem(row, 3, QTableWidgetItem(str( other[0] )) )
-                    self.tableWidget_10.setItem(row, 4, QTableWidgetItem(str( other[1] )) )
-            
-                    row+=1
-                    here+=1
-
-                elif act==actions['Add Book'] and act!=0 and here==3:
-                    self.tableWidget_10.setItem(row, 0, QTableWidgetItem(str(i)) )
-                    self.tableWidget_10.setItem(row, 1, QTableWidgetItem(str(national_id)) )
-                    self.tableWidget_10.setItem(row, 2, QTableWidgetItem('Add Book : '+str(act)) )
-                    
-                    self.cur.execute("select date ,branch_id from history where employee = '{}' and actions = '{}'".format(i, 'Add Book'))
-                    other = self.cur.fetchone()
-                    
-                    self.tableWidget_10.setItem(row, 3, QTableWidgetItem(str( other[0] )) )
-                    self.tableWidget_10.setItem(row, 4, QTableWidgetItem(str( other[1] )) )
-
-                    row+=1
-                    here+=1
-
-                elif act==actions['Delete Book'] and act!=0 and here==5:
-                    self.tableWidget_10.setItem(row, 0, QTableWidgetItem(str(i)) )
-                    self.tableWidget_10.setItem(row, 1, QTableWidgetItem(str(national_id)) )
-                    self.tableWidget_10.setItem(row, 2, QTableWidgetItem('Delete Book : '+str(act)) )
-                    
-                    self.cur.execute("select date ,branch_id from history where employee = '{}' and actions = '{}'".format(i, 'Delete Book'))
-                    other = self.cur.fetchone()
-                    
-                    self.tableWidget_10.setItem(row, 3, QTableWidgetItem(str( other[0] )) )
-                    self.tableWidget_10.setItem(row, 4, QTableWidgetItem(str( other[1] )) )
-
-                elif act==actions['Edit Book'] and act!=0 and here==4:
-                    self.tableWidget_10.setItem(row, 0, QTableWidgetItem(str(i)) )
-                    self.tableWidget_10.setItem(row, 1, QTableWidgetItem(str(national_id)) )
-                    self.tableWidget_10.setItem(row, 2, QTableWidgetItem('Edit Book : '+str(act)) )
-                    
-                    self.cur.execute("select date ,branch_id from history where employee = '{}' and actions = '{}'".format(i, 'Edit Book'))
-                    other = self.cur.fetchone()
-                    
-                    self.tableWidget_10.setItem(row, 3, QTableWidgetItem(str( other[0] )) )
-                    self.tableWidget_10.setItem(row, 4, QTableWidgetItem(str( other[1] )) )
-
-                    row+=1
-                    here+=1
-
-                elif act==actions['Add Client'] and act!=0 and here==6:
-                    self.tableWidget_10.setItem(row, 0, QTableWidgetItem(str(i)) )
-                    self.tableWidget_10.setItem(row, 1, QTableWidgetItem(str(national_id)) )
-                    self.tableWidget_10.setItem(row, 2, QTableWidgetItem('Add Client : '+str(act)) )
-                    
-                    self.cur.execute("select date ,branch_id from history where employee = '{}' and actions = '{}'".format(i, 'Add Client'))
-                    other = self.cur.fetchone()
-                    
-                    self.tableWidget_10.setItem(row, 3, QTableWidgetItem(str( other[0] )) )
-                    self.tableWidget_10.setItem(row, 4, QTableWidgetItem(str( other[1] )) )
-                    
-                    row+=1
-                    # here+=1
-
-                elif act==actions['Delete Client'] and act!=0 and here==8:
-                    self.tableWidget_10.setItem(row, 0, QTableWidgetItem(str(i)) )
-                    self.tableWidget_10.setItem(row, 1, QTableWidgetItem(str(national_id)) )
-                    self.tableWidget_10.setItem(row, 2, QTableWidgetItem('Delete Client : '+str(act)) )
-                    
-                    self.cur.execute("select date ,branch_id from history where employee = '{}' Delete actions = '{}'".format(i, 'Add Client'))
-                    other = self.cur.fetchone()
-                    
-                    self.tableWidget_10.setItem(row, 3, QTableWidgetItem(str( other[0] )) )
-                    self.tableWidget_10.setItem(row, 4, QTableWidgetItem(str( other[1] )) )
-
-                    row+=1
-
-                elif act==actions['Edit Client'] and act!=0 and here==7:
-                    self.tableWidget_10.setItem(row, 0, QTableWidgetItem(str(i)) )
-                    self.tableWidget_10.setItem(row, 1, QTableWidgetItem(str(national_id)) )
-                    self.tableWidget_10.setItem(row, 2, QTableWidgetItem('Edit Client : '+str(act)) )
-                    
-                    self.cur.execute("select date ,branch_id from history where employee = '{}' and actions = '{}'".format(i, 'Edit Client'))
-                    other = self.cur.fetchone()
-                    
-                    self.tableWidget_10.setItem(row, 3, QTableWidgetItem(str( other[0] )) )
-                    self.tableWidget_10.setItem(row, 4, QTableWidgetItem(str( other[1] )) )
-
-                    row+=1
-                    
-
-            print("row:"+str(row))
 
 
 
-    def All_Employeies_Reports(self):
-        # Load data into excel file
-        file_date = datetime.now().strftime('%d of %m')
 
-        excel_file = Workbook('All Employeis Export Report ('+str( file_date )+' ).xlsx')
-        sheet1 = excel_file.add_worksheet()
+    """===============================================================================================
+    ============================= Reports Tab Functions."""
+    
+    # Book tab --> show a report about books in the system
+    def Show_All_Book_Reports(self):
 
-        # Add Formats
-        bold = excel_file.add_format({'bold':1})
+        # Variables.
+        table = self.tableWidget_7
+
+        # Run.
+        TabWidget.ReportsTab().getBookReport(table)
+
+    # Export an Excel file about All Books in The System.
+    def ExportReportOfBooks(self):
+        """Export a Report of All Books in The System."""
+
+        # Run.
+        ExcelFiles.ReportsTab().exportBooksReport()
+
+
+    # Client tab --> Show a Report about Client in The System.    
+    def Show_All_Client_Reports(self):
+        """Export as Excel File Data is the All Client in the System."""
+
+        # Variables.
+        table = self.tableWidget_8
         
-        # Format Columns
-        sheet1.set_column(0,2,16)
-        sheet1.set_column(3,3,18)
+        # Run.
+        TabWidget.ReportsTab().getClientsReport(table)      
 
-        # Set Headers
-        sheet1.write('A1','Name', bold)
-        sheet1.write('B1','National ID', bold)
-        sheet1.write('C1','Actions', bold)
-        sheet1.write('D1','Date', bold)
-        sheet1.write('E1','Branch', bold)
+    # Export a list of Clients Report.
+    def ExportReportAboutClients(self):
+        """Export a List of Clients Report as Excel File."""
+
+        # Run.
+        ExcelFiles.ReportsTab().exportClientsReport()
+
+    # Employee tab --> Show A Report about Employeies in The System.
+    def Show_Employee_Report(self):
+        # Employee tab --> Show A Report about Employeies in The System.
         
+        # Variables.
+        table = self.tableWidget_10
 
-        # Insert data from database to excel file
-        # Get row, column counts
-        rowCount = self.tableWidget_10.rowCount()
-        columnCount = self.tableWidget_10.columnCount()
-
-        # Loop through that numbers
-        sheetRow=0
-        for row in range(rowCount):
-            sheetRow+=1
-            for col in range(columnCount):
-                data = self.tableWidget_10.item(row, col).text()
-                sheet1.write(sheetRow, col, data)
-
-        # Close Excel file to save
-        excel_file.close()
+        # Run.
+        TabWidget.ReportsTab().getEmployeiesReport(table)
 
 
-    def Employee_Report_Export(self):
-        pass
+    # Export a list of Employeis Report.
+    def ExportReportAboutEmployeies(self):
+        """Export a list of Employeis Report as Excel File."""
+        
+        # Variables.
+        table = self.tableWidget_10
+        
+        # Run.
+        tableData = Tools.getEmployeeTableWidgetData(table)
+        ExcelFiles.ReportsTab().exportEmployeiesReport(tableData)
+
+        # Notification.
+        print("Exported!!")
+
+    
 
 
-    ###############################################################
-    #### Load Data To ComoBoxies
-
+    """==============================================================================
+    ============================== Load Combo Box Data ==========================="""
     def Show_All_Categories(self):
         # Clear Trash
         self.comboBox_25.clear() 
         self.comboBox_25.addItem("---------")
-        # self.comboBox_3.clear() 
-        # self.comboBox_3.addItem("---------")
+
         self.comboBox_4.clear() 
         self.comboBox_4.addItem("---------")
+
         self.comboBox_5.clear() 
         self.comboBox_5.addItem("---------")
 
         # Get Data from Database
-        self.cur.execute("select category_name from category")
-        categories = self.cur.fetchall()
-
+        categories = database.getAll("select category_name from category")
+        
         # Insert Data
         for category in categories:
-            #print(category[0])
             self.comboBox_25.addItem(category[0])
-            # self.comboBox_3.addItem(category[0])
             self.comboBox_4.addItem(category[0])
             self.comboBox_5.addItem(category[0])
 
@@ -1545,13 +1312,13 @@ class Main(QMainWindow , MainUI):
         # Clear Trash
         self.comboBox_8.clear() 
         self.comboBox_8.addItem("---------")
+
         self.comboBox_13.clear() 
         self.comboBox_13.addItem("---------")
         
 
         # Get Data from Database
-        self.cur.execute("select name from publisher")
-        publishers = self.cur.fetchall()
+        publishers = database.getAll("select name from publisher") 
 
         # Insert Data
         for publisher in publishers:
@@ -1562,13 +1329,13 @@ class Main(QMainWindow , MainUI):
         # Clear Trash
         self.comboBox_6.clear() 
         self.comboBox_6.addItem("---------")
+
         self.comboBox_10.clear() 
         self.comboBox_10.addItem("---------")
         
 
         # Get Data from Database
-        self.cur.execute("select name from author")
-        publishers = self.cur.fetchall()
+        publishers = database.getAll("select name from author")
 
         # Insert Data
         for publisher in publishers:
@@ -1581,793 +1348,523 @@ class Main(QMainWindow , MainUI):
 
             
 
-    ###############################################################
-    #### Settings
+    """=============================================================================
+    ============================== Setting Tab Functions. ======================="""
+    
+    """===== Branch ====="""
+    # Get Branch Fields Data.
+    def getBranchDataFields(self):
+        # Get Branch Data from Fields.
 
-    def Add_Branch(self):
-        # Get Data About Author
-        branch_name = self.lineEdit_23.text()
-        branch_code = self.lineEdit_24.text()
-        branch_location = self.lineEdit_25.text()
+        id = database.generateID("select * from branch")
+        branchName = self.lineEdit_23.text()
+        branchCode = self.lineEdit_24.text()
+        branchLocation = self.lineEdit_25.text()
+        branchAdmin = self.lineEdit_39.text()
 
-        # Add Data To Database
+        # Check and Kick.
+        fields = {'branch name':branchName, 'branch code':branchCode, 'branch location':branchLocation, 'branch admin':branchAdmin}
+        checkResult = Tools.checkFields(fields)
 
-        # Here to get last id number
-        self.cur.execute("select id from branch")
-        id = len(self.cur.fetchall())+1
-
-        # Check is There another id same and fix it
-        self.cur.execute("select * from branch where id = '{}'".format(id))
-        count_id = len( self.cur.fetchall() )
-        
-        if count_id > 0:
-            id+=1
-
-        data = [(
-            id , branch_name , branch_code , branch_location
-        )]
-
-        
-        self.cur.executemany("insert or ignore into branch values(?,?,?,?)",data)
-        
-
-        # Add this Actions in History
-        # Generate History id
-        self.cur.execute("select * from history")
-        history_id = len( self.cur.fetchall() ) +1
-        date = datetime.now().strftime('%d-%m-%Y %H:%M')
-
-
-        # Check is There another id same and fix it
-        self.cur.execute("select * from books where id = '{}'".format(history_id))
-        count_id = len( self.cur.fetchall() )
-        
-        if count_id > 0:
-            history_id+=1
-
-        self.cur.executemany("insert into history values (?,?,?,?,?,?)",[(
-            history_id, employee_id, "Add Branch", date, branch_id, branch_name
-        )])
-
-        # Save data in database
-        self.db.commit()
-
+        if checkResult==True:
+            return (id, branchName, branchCode, branchLocation, branchAdmin)
+        else:
+            return checkResult
+    
+    
+    # Clean.
+    def clearBranchDataFields(self):
         # Cleart Fields
         self.lineEdit_23.clear()
         self.lineEdit_24.clear()
         self.lineEdit_25.clear()
+        self.lineEdit_39.clear()
+
+    # Add New Branch to System.
+    def Add_Branch(self):
+        
+        # __init__
+        canRun = True
 
 
-        # Notifications
-        print("Branch Added !")
+        # Get data.
+        branchData = self.getBranchDataFields()
+
+        # Check and Kick.
+        if branchData==False:
+            canRun=False
+        
+        # Run.
+        if canRun==True:
+            # Save in Database.
+            database.insertManyData("insert into branch values(?,?,?,?,?)",[branchData])
+
+            # Save Action in History.
+            action = {'action':'add new branch', 'extra':branchData[1], 'branch id':branch_id, 'employee id':employee_id}
+            Tools.SaveActionToHistory(action)
+
+            # Clean.
+            self.clearBranchDataFields()
 
 
+            # Notifications
+            print("Branch Added !")
+
+    """===== Category ====="""
+    # Add new Categoey to the System.
     def Add_Category(self):
+
+        #__inti__
+        canRun = True
+
         # Get Data About Category
-        category_name = self.lineEdit_30.text()
-        parent_category = self.comboBox_25.currentIndex()
-
-        parent_category_text = self.comboBox_25.currentText()
+        id = database.generateID("select * from category")
+        categoryName = self.lineEdit_30.text()
         
-        # Check number range
-        if parent_category_text[0]=="-":
-            parent_category=0
+        # Check and Kick.
+        if len( categoryName )==empty:
+            canRun=False
+            print("Please enter a category name.")
+
+        # Run.
+        if canRun==True:
+
+            #Add Data To Database
+            database.insertManyData("insert into category values(?,?,?)",[(
+                id, categoryName, "None"
+            )])
+
+            # Cleart Fields
+            self.lineEdit_30.clear()
+
+            # Refreash Data in Combo Box
+            self.Show_All_Categories()
+
+
+            # Add this Aciotn in History
+            action = {'action':'add new cateogry', 'extra':categoryName, 'branch id':branch_id, 'employee id':employee_id}
+            Tools.SaveActionToHistory(action)
         
+            # Notifications
+            print("Category {} Added !".format(categoryName))
 
-        #Add Data To Database
-        self.cur.execute("select id from category") # Here to get last id number
-        id = len(self.cur.fetchall()) +1
-
-        # Check is There another id same and fix it
-        self.cur.execute("select * from category where id = '{}'".format(id))
-        count_id = len( self.cur.fetchall() )
-        
-        if count_id > 0:
-            id+=1
-
-        data = [(
-            id , category_name , parent_category
-        )]
-
-        
-        self.cur.executemany("insert into category values(?,?,?)",data)
-
-        # Cleart Fields
-        self.lineEdit_30.clear()
-
-        # Refreash Data in Combo Box
-        self.Show_All_Categories()
-
-
-        # Add this Aciotn in History
-        # Generate History id
-        self.cur.execute("select * from history")
-        history_id = len( self.cur.fetchall() ) +1
-        date = datetime.now().strftime('%d-%m-%Y %H:%M')
-
-
-        # Check is There another id same and fix it
-        self.cur.execute("select * from books where id = '{}'".format(history_id))
-        count_id = len( self.cur.fetchall() )
-        
-        if count_id > 0:
-            history_id+=1
-
-        self.cur.executemany("insert into history values (?,?,?,?,?,?)",[(
-            history_id, employee_id, "Add Category", date, branch_id, category_name
-        )])
-
-        # Save data in database
-        self.db.commit()
-
-
-        # Notifications
-        print("Category Added !")
-
-
-    def Add_Publisher(self):
+    """===== Publisher ====="""
+    # Get Publisher Data Fields.
+    def getPublisherDataFields(self):# Tool
         # Get Data About Publisher
-        publisher_name = self.lineEdit_27.text()
-        publisher_location = self.lineEdit_26.text()
+        id = database.generateID("select * from publisher")
+        publisherName = self.lineEdit_27.text()
+        publisherLocation = self.lineEdit_26.text()
 
-        # Add Data To Database
-        self.cur.execute("select id from publisher") # Here to get last id number
-        id = len(self.cur.fetchall())+1
+        # Check.
+        fields = {'publisher name':publisherName, 'publisher location':publisherLocation}
+        checkResult = Tools.checkFields(fields)
 
-        # Check is There another id same and fix it
-        self.cur.execute("select * from author where id = '{}'".format(id))
-        count_id = len( self.cur.fetchall() )
-        
-        if count_id > 0:
-            id+=1
+        # Output.
+        if checkResult==True:
+            return (id, publisherName, publisherLocation)
+        else:
+            return checkResult
 
-        data = [(
-            id , publisher_name , publisher_location
-        )]
-
-        
-        self.cur.executemany("insert or ignore into publisher values(?,?,?)",data)
-
-        # Cleart Fields
+    # Clear publisher Fields.
+    def clearPublisherDataFields(self):
+         # Cleart Fields
         self.lineEdit_27.clear()
         self.lineEdit_26.clear()
 
+    # Add new Publisher to The System.
+    def Add_Publisher(self):
 
+        # __init__
+        canRun = True
 
-        # Add this Aciotn in History
-        # Generate History id
-        self.cur.execute("select * from history")
-        history_id = len( self.cur.fetchall() ) +1
-        date = datetime.now().strftime('%d-%m-%Y %H:%M')
+        # Get Data Fields.
+        publisherData = self.getPublisherDataFields()
 
+        # Check.      
+        if publisherData==False:
+            canRun=False
 
-        # Check is There another id same and fix it
-        self.cur.execute("select * from books where id = '{}'".format(history_id))
-        count_id = len( self.cur.fetchall() )
+        # Run.
+        if canRun==True:
+
+            # Add Data To Database
+            database.insertManyData("insert into publisher values(?,?,?)",[publisherData])
         
-        if count_id > 0:
-            history_id+=1
+            # Clean.
+            self.clearPublisherDataFields()
 
-        self.cur.executemany("insert into history values (?,?,?,?,?,?)",[(
-            history_id, employee_id, "Add Publisher", date, branch_id, publisher_name
-        )])
+            # Save Action in History.
+            action = {'action':'add new publisher', 'extra':publisherData[1], 'branch id':branch_id, 'employee id':employee_id}
+            Tools.SaveActionToHistory(action)
 
-        # Save data in database
-        self.db.commit()
+            # Refreash System.
+            self.Show_All_Publishers()
 
+            # Notifications
+            print("Publisher {} Added !".format(publisherData[1]))
 
-        # Notifications
-        print("Publisher Added !")
-        self.Show_All_Publishers()
-
-
+    """===== Author ====="""
+    # Add new Author to The System.
     def Add_Author(self):
-        # Get Data About Author
-        author_name = self.lineEdit_29.text()
-        author_location = self.lineEdit_28.text()
+        # Variables.
+        authorName = self.lineEdit_29
+        authorLocation = self.lineEdit_28
 
-        # Add Data To Database
-        self.cur.execute("select id from author") # Here to get last id number
-        id = len(self.cur.fetchall())+1
-
-        # Check is There another id same and fix it
-        self.cur.execute("select * from author where id = '{}'".format(id))
-        count_id = len( self.cur.fetchall() )
-        
-        if count_id > 0:
-            id+=1
-
-        data = [(
-            id , author_name , author_location
-        )]
-
-        
-        self.cur.executemany("insert or ignore into author values(?,?,?)",data)
-
-        # Cleart Fields
-        self.lineEdit_29.clear()
-        self.lineEdit_28.clear()
-
-
-
-        # Add this Aciotn in History
-        # Generate History id
-        self.cur.execute("select * from history")
-        history_id = len( self.cur.fetchall() ) +1
-        date = datetime.now().strftime('%d-%m-%Y %H:%M')
-
-
-        # Check is There another id same and fix it
-        self.cur.execute("select * from books where id = '{}'".format(history_id))
-        count_id = len( self.cur.fetchall() )
-        
-        if count_id > 0:
-            history_id+=1
-
-        self.cur.executemany("insert into history values (?,?,?,?,?,?)",[(
-            history_id, employee_id, "Add Author", date, branch_id, author_name
-        )])
-
-        # Save data in database
-        self.db.commit()
-
+        # Run.
+        thisObjects = {'name':authorName, 'location':authorLocation, 'branch':branch_id, 'employee':employee_id}
+        authorName = TabWidget.SettingTab().fetchAuthorData(thisObjects)
 
         # Notifications
-        print("Author Added !")
-        self.Show_All_Authors()
+        if authorName != None:
+            print("Author {} Added !".format(authorName))
+            self.Show_All_Authors()
 
 
-    ###############################################################
-    #### Settings tap Employeis
-
+    """===== Employee ====="""
     # Add a New Employee & save changes in database.
     def Add_Employee(self):
         
-        # Get data from feilds
-        employee_name = self.lineEdit_31.text()
-        employee_mail = self.lineEdit_32.text()
+        # Variables.
+        employeeName = self.lineEdit_31
+        employeeMail = self.lineEdit_32
 
-        employee_phone = self.lineEdit_33.text()
-        employee_national_id = self.lineEdit_34.text()
-        employee_periority = self.lineEdit_35.text()
-        branch = self.lineEdit_53.text()
+        employeePhone = self.lineEdit_33
+        employeeNationalID = self.lineEdit_34
 
-        employee_password = self.lineEdit_36.text()
-        employee_repassword = self.lineEdit_37.text()
+        employeePeriority = self.lineEdit_35
+        branch = self.lineEdit_53
 
-        date = datetime.now().strftime('%d-%m-%Y %H:%M')
-
-        # Generate id
-        self.cur.execute("select * from employee")
-        id = len( self.cur.fetchall() ) +1
-
-        # Check is There Employee id same and fix it
-        self.cur.execute("select * from employee where id = '{}'".format(id))
-        count_id = len( self.cur.fetchall() )
+        employeePassword = self.lineEdit_36
+        employeeRepassword = self.lineEdit_37
         
-        if count_id > 0:
-            id+=1
+
+        # Objects.    
+        thisObjects = {
+            'name':employeeName,
+            'mail':employeeMail,
+            'phone':employeePhone,
+            'id':employeeNationalID,
+            'periority':employeePeriority,
+            'branch':branch,
+            'password':employeePassword,
+            'repassword':employeeRepassword,
+            'current branch':branch_id,
+            'current employee':employee_id
+        }
         
-        # Check Password
-        if employee_password==employee_repassword:
-            # Load Data to Database
-            data = [
-                (id, employee_name, employee_mail, employee_phone, 
-                date, employee_national_id, employee_periority, branch, employee_password)
-            ]
-            print(data)
-            self.cur.executemany("insert into employee values(?,?,?,?,?,?,?,?,?)",data)
+        # Run.
+        employee = TabWidget.SettingTab().fetchEmployeeData(thisObjects)
 
-            
-
-            # Add this Aciotn in History
-            # Generate History id
-            self.cur.execute("select * from history")
-            history_id = len( self.cur.fetchall() ) +1
-            # date = datetime.now()
-
-
-            # Check is There another id same and fix it
-            self.cur.execute("select * from books where id = '{}'".format(history_id))
-            count_id = len( self.cur.fetchall() )
-            
-            if count_id > 0:
-                history_id+=1
-
-            self.cur.executemany("insert into history values (?,?,?,?,?,?)",[(
-                history_id, employee_id, "Add Employee", date, branch_id, employee_name
-            )])
-
-            # Save data in database
-            self.db.commit()
-
-            
-
-
+        if employee != None:
             # Notification
-            print("Employee "+str(employee_name)+" Added!")
-            self.Show_Employee()
-
-        else:
-            print("Please Enter Password Again!")
-
-        
+            print("Employee {} Added!".format(employee))
+            
     # Chech the password and username from gui and connect with database
-    def Check_Employee_toEdit(self):
-        # Get data from fields
-        employee_name = self.lineEdit_43.text()
-        employee_password = self.lineEdit_44.text()
+    def Check_Employee_toEdit(self): # Tool.
+        # Variables & Objects.
+        employeeName = self.lineEdit_43.text()
+        employeePassword = self.lineEdit_44.text()
 
-        # Check username and password in databse
-        self.cur.execute("select name, password from employee where name like '{}%' and Password = '{}'".format(employee_name,employee_password))
-        data = self.cur.fetchall()
-        
-        # Check is there a data
-        if len(data)>0 : # There is a data so complate
-            # Search in data about our person
-            person_id=0
-            for index, person in enumerate(data):
-                if person[0]==employee_name  and person[1]==employee_password:
-                    person_id=index
+        thisObjects = {'name':employeeName, 'password':employeePassword}
 
-            # Check is password is True or False
-            if data[person_id][1] == employee_password:
-                # Enabel To Edit Employee
-                self.groupBox.setEnabled(True)
-                print("Connected !! \nand now you can edit employee data")
-            else:
-                print("Incurrect password !!")
+        # Run.
+        checkResult = TabWidget.SettingTab().checkEmployeeInSystem(thisObjects)
 
+        if checkResult==True:
+            # Enable Edit.
+            self.groupBox.setEnabled(True)
+
+            # Load Data.
             self.Edit_Employee_Data()
-        
-        else: # There is no data so stop
-            print(" There is no user with this {} name!".format(employee_name))
-        
-        
+            
     # Show Employee data in fields to edit it
-    def Edit_Employee_Data(self):
+    def Edit_Employee_Data(self): # Tool.
 
-        # Get username and password from fields
-        employee_name = self.lineEdit_43.text()
-        employee_password = self.lineEdit_44.text()
+    
+        # Objects.   
+        employeeName = self.lineEdit_43.text()
+        employeePassword = self.lineEdit_44.text()
+            
+        emplpoyeePhone = self.lineEdit_40
+        emplpoyeeMail = self.lineEdit_61
 
-        # Get data from database
-        self.cur.execute("select phone, national_id, Periority, Branch, Password from employee where name = '{}' and password = '{}'".format(employee_name, employee_password))
-        data = self.cur.fetchone()
+        emplpoyeeID = self.lineEdit_41
+        emplpoyeePeriority = self.lineEdit_38
+        emplpoyeeBranch = self.lineEdit_52
 
-        # Load data to Fields        
-        emplpoyee_phone = self.lineEdit_40.setText(data[0])
-        emplpoyee_national_id = self.lineEdit_41.setText(str(data[1]))
-        emplpoyee_periority = self.lineEdit_38.setText(str(data[2]))
-        emplpoyee_branch = self.lineEdit_52.setText(str(data[3]))
-        emplpoyee_password = self.lineEdit_42.setText(data[4])
-        emplpoyee_repassword= self.lineEdit_39.setText(data[4])
+        emplpoyeeRepassword = self.lineEdit_42
+
+        thisObjects = {
+            'name':employeeName,
+            'password':employeePassword,
+            'phone':emplpoyeePhone,
+            'mail':emplpoyeeMail,
+            'id':emplpoyeeID,
+            'periority':emplpoyeePeriority,
+            'branch':emplpoyeeBranch,
+            'repassword':emplpoyeeRepassword
+        }
+
+
+        # Run.
+        TabWidget.SettingTab().loadEmployeeDataFields(thisObjects)
+
 
     # Save the Edits to database    
-    def Save_Edit_Employee(self):
-        # Get username and password from fields
-        username = self.lineEdit_43.text()
-        password = self.lineEdit_44.text()
-
-        # Get data to Fields        
-        emplpoyee_phone = self.lineEdit_40.text()
-        emplpoyee_national_id = self.lineEdit_41.text()
-        emplpoyee_periority = self.lineEdit_38.text()
-        emplpoyee_branch = self.lineEdit_52.text()
-        emplpoyee_password = self.lineEdit_42.text()
-        emplpoyee_repassword= self.lineEdit_39.text()
-
-
-        # Check is password and repassword are currect then complate program
-        if emplpoyee_password==emplpoyee_repassword:
-            # Qeury string to update data
-            sql = """update employee
-                set phone = '{0}',
-                national_id = '{1}',
-                Periority = '{2}',
-                Branch = '{3}',
-                Password = '{4}'
-                where name = '{5}' and password = '{6}'""".format(
-                    emplpoyee_phone, emplpoyee_national_id,
-                    emplpoyee_periority, emplpoyee_branch,
-                    emplpoyee_password, username, password
-                )
-            self.cur.execute(sql)
-
-            # Add this Aciotn in History
-            # Generate History id
-            self.cur.execute("select * from history")
-            history_id = len( self.cur.fetchall() ) +1
-            date = datetime.now().strftime('%d-%m-%Y %H:%M')
-
-
-            # Check is There another id same and fix it
-            self.cur.execute("select * from books where id = '{}'".format(history_id))
-            count_id = len( self.cur.fetchall() )
+    def CommitEmployeeEdit(self):# Tool.
+       # Objects.   
+        employeeName = self.lineEdit_43
+        employeePassword = self.lineEdit_44
             
-            if count_id > 0:
-                history_id+=1
+        emplpoyeePhone = self.lineEdit_40
+        emplpoyeeMail = self.lineEdit_61
 
-            self.cur.executemany("insert into history values (?,?,?,?,?,?)",[(
-                history_id, employee_id, "Edit Employee", date, branch_id, username
-            )])
+        emplpoyeeID = self.lineEdit_41
+        emplpoyeePeriority = self.lineEdit_38
+        emplpoyeeBranch = self.lineEdit_52
 
-            # Save data in database
-            self.db.commit()
+        emplpoyeeRepassword = self.lineEdit_42
+
+        thisObjects = {
+            'name':employeeName,
+            'password':employeePassword,
+            'phone':emplpoyeePhone,
+            'mail':emplpoyeeMail,
+            'id':emplpoyeeID,
+            'periority':emplpoyeePeriority,
+            'branch':emplpoyeeBranch,
+            'repassword':emplpoyeeRepassword,
+            'current branch':branch_id,
+            'current employee':employee_id
+        }
 
 
-            print("Save_Edit_Employee Done!")
+        # Run.
+        editEmployee = TabWidget.SettingTab().saveEmployeeDataChanges(thisObjects)
+        
+        # Output.
+        if editEmployee != None:
+            print("Employee {} Updated".format(employeeName))
 
 
-
-    ###############################################################
-    #### Settings tap Permissions & Reports
-    def Show_Employee(self):
+    
+    # Show Employeies in Combo Bos in System.
+    def Show_Employee(self): # Tool.
         # Clear ComboBox
         self.comboBox_29.clear()
+        self.comboBox_selectEmployee_forgetPassword.clear()
+
 
         # Get data from database
-        self.cur.execute("select name from employee")
-        employeis = self.cur.fetchall()
+        employeis = database.getAll("select name from employee") 
 
         # Insert data in ComboBox
-        for empployee in employeis:
-            self.comboBox_29.addItem(empployee[0])
-
-        print("Show_Employee Done!")
-        
-
-
-
+        for employee in employeis:
+            self.comboBox_29.addItem(employee[0])
+            self.comboBox_selectEmployee_forgetPassword.addItem(employee[0])
 
 
 
     # Check the employee permission and check it in GUI
     def Check_empployee_Permissions(self):
-        name = self.comboBox_29.currentText() # Get name from field
 
-        # Get data from database
-        self.cur.execute("select * from employee_permission where name = '{}'".format(name))
-        data = self.cur.fetchone()
-
-        # Simple algorithm to know are all book, client, public or stteing permission is checked!
-        # For book
-        count_permissions = 0 # To count the size of data checked
-        for index  in range(2,7):
-            if data[index] == True:
-                count_permissions+=1
-        if count_permissions==5:
-            self.checkBox_30.setChecked(1) # Check ALL ,GUI
+        # Variables.
+        allBookCB = self.checkBox_30    ; allClientCB = self.checkBox_31
+        addBookCB = self.checkBox       ; addClientCB = self.checkBox_4
+        editBookCB = self.checkBox_2    ; editClientCB = self.checkBox_5
+        delBookCB = self.checkBox_3     ; delClientCB = self.checkBox_6
+        exportBookCB = self.checkBox_26 ; exportClientCB = self.checkBox_28
+        importBookCB = self.checkBox_27 ; importClientCB = self.checkBox_29
         
-        # For Client
-        count_permissions = 0
-        for index  in range(7,12):
-            if data[index] == True:
-                count_permissions+=1
-        if count_permissions==5:
-            self.checkBox_31.setChecked(1)
+        allPublicCB = self.checkBox_32
+        bookTabCB = self.checkBox_7
+        clientTabCB = self.checkBox_8
+        dashbourdTabCB = self.checkBox_9
+        historyTabCB = self.checkBox_10
+        reportsTabCB = self.checkBox_11
+        settingTabCB = self.checkBox_12
 
-        # For Public
-        count_permissions = 0
-        for index  in range(12,18):
-            if data[index] == True:
-                count_permissions+=1
-        if count_permissions==6:
-            self.checkBox_32.setChecked(1)
+        allSettingCB = self.checkBox_33
+        addDataCB = self.checkBox_21
+        addEmployeeCB = self.checkBox_22
+        editEmployeeCB = self.checkBox_24
 
-        # For Settings
-        count_permissions = 0
-        for index  in range(18,24):
-            if data[index] == True:
-                count_permissions+=1
-        if count_permissions==6:
-            self.checkBox_33.setChecked(1)
 
-        #### Load data to fields
-        # Book Permission
-        add_book =  self.checkBox.setChecked(data[2])
-        edit_book =  self.checkBox_2.setChecked(data[3])
-        delete_book =  self.checkBox_3.setChecked(data[4])
-        export_book =  self.checkBox_26.setChecked(data[5])
-        import_book =  self.checkBox_27.setChecked(data[6])
+        # Sort Data.
+        employeeName = self.comboBox_29.currentText()
+        admin = self.checkBox_25
+        thisObjects = {
+            'name':employeeName,
+            'all book':allBookCB,
+            'add book':addBookCB, 
+            'edit book':editBookCB, 
+            'delete book':delBookCB, 
+            'export book':exportBookCB, 
+            'import book':importBookCB,
+            'all client':allClientCB,
+            'add client':addClientCB,
+            'edit client':editClientCB,
+            'delete client':delClientCB,
+            'export client':exportClientCB,
+            'import client':importClientCB,
+            'all public':allPublicCB, 
+            'book':bookTabCB, 
+            'client':clientTabCB, 
+            'dashbourd':dashbourdTabCB, 
+            'history':historyTabCB,
+            'reports':reportsTabCB,
+            'setting':settingTabCB,
+            'all setting':allSettingCB,
+            'add data':addDataCB,
+            'add employee':addEmployeeCB,
+            'edit employee':editEmployeeCB,
+            'admin':admin,
+        }
 
-        # Client Permission
-        add_client =  self.checkBox_4.setChecked(data[7])
-        edit_client =  self.checkBox_5.setChecked(data[8])
-        delete_client =  self.checkBox_6.setChecked(data[9])
-        export_client =  self.checkBox_28.setChecked(data[10])
-        import_client =  self.checkBox_29.setChecked(data[11])
+        # Run.
+        TabWidget.SettingTab().loadEmployeePermissions(thisObjects)
 
-        # Public Permission
-        book_tap =  self.checkBox_7.setChecked(data[12])
-        client_tap =  self.checkBox_8.setChecked(data[13])
-        dashbourd_tap =  self.checkBox_9.setChecked(data[14])
-        history_tap =  self.checkBox_10.setChecked(data[15])
-        reports_tap =  self.checkBox_11.setChecked(data[16])
-        settings_tap =  self.checkBox_12.setChecked(data[17])
 
-        # Settings Permission
-        add_branch =  self.checkBox_21.setChecked(data[18])
-        add_publisher =  self.checkBox_20.setChecked(data[19])
-        add_author =  self.checkBox_19.setChecked(data[20])
-        add_category =  self.checkBox_23.setChecked(data[21])
-        add_employee =  self.checkBox_22.setChecked(data[22])
-        edit_employee =  self.checkBox_24.setChecked(data[23])
-
-        # Special Permission
-        admin = self.checkBox_25.setChecked(data[24])
-
+        
     
 
     # Add a permossion to employee and save data in database
-    def Add_Employee_Permissions(self):
-        # Get name from field
-        name = self.comboBox_29.currentText()
+    def Edit_Employee_Permissions(self):
 
-        # Special Permission
-        admin = self.checkBox_25.isChecked()
-        if admin==1: # Make all permissions allowed
-            all_book=True
-            all_client=True
-            all_public=True
-            all_employee=True
-
-
-        ##### Book Permission
-        # Special book
-        all_book = self.checkBox_30.isChecked() # Check ALL ,GUI
-        if all_book==1: # All Book
-            # Add value
-            add_book =  1
-            edit_book =  1
-            delete_book =  1
-            export_book =  1
-            import_book =  1
-
-            # Ckeck in GUI
-            self.checkBox.setChecked(1)
-            self.checkBox_2.setChecked(1)
-            self.checkBox_3.setChecked(1)
-            self.checkBox_26.setChecked(1)
-            self.checkBox_27.setChecked(1)
+        # Variables.
+        allBookCB = self.checkBox_30    ; allClientCB = self.checkBox_31
+        addBookCB = self.checkBox       ; addClientCB = self.checkBox_4
+        editBookCB = self.checkBox_2    ; editClientCB = self.checkBox_5
+        delBookCB = self.checkBox_3     ; delClientCB = self.checkBox_6
+        exportBookCB = self.checkBox_26 ; exportClientCB = self.checkBox_28
+        importBookCB = self.checkBox_27 ; importClientCB = self.checkBox_29
         
-        else:
-            add_book =  self.checkBox.isChecked()
-            edit_book =  self.checkBox_2.isChecked()
-            delete_book =  self.checkBox_3.isChecked()
-            export_book =  self.checkBox_26.isChecked()
-            import_book =  self.checkBox_27.isChecked()
+        allPublicCB = self.checkBox_32
+        bookTabCB = self.checkBox_7
+        clientTabCB = self.checkBox_8
+        dashbourdTabCB = self.checkBox_9
+        historyTabCB = self.checkBox_10
+        reportsTabCB = self.checkBox_11
+        settingTabCB = self.checkBox_12
 
-        
+        allSettingCB = self.checkBox_33
+        addDataCB = self.checkBox_21
+        addEmployeeCB = self.checkBox_22
+        editEmployeeCB = self.checkBox_24
 
 
-        ##### Client Permission
-        # Special client
-        all_client = self.checkBox_31.isChecked()# Check ALL ,GUI
-        if all_client==1: # All client
-            # Add values
-            add_client =  1
-            edit_client =  1
-            delete_client =  1
-            export_client =  1
-            import_client =  1
+        # Sort Data.
+        employeeName = self.comboBox_29.currentText()
+        admin = self.checkBox_25
+        thisObjects = {
+            'admin':admin, 'name':employeeName,
+            'all book':allBookCB, 'all client':allClientCB,
+            'add book':addBookCB, 'add client':addClientCB,
+            'edit book':editBookCB, 'edit client':editClientCB,
+            'delete book':delBookCB, 'delete client':delClientCB,
+            'export book':exportBookCB, 'export client':exportClientCB,
+            'import book':importBookCB, 'import client':importClientCB,
+            'all public':allPublicCB, 'all setting':allSettingCB,
+            'book':bookTabCB, 'add data':addDataCB,
+            'client':clientTabCB, 'add employee':addEmployeeCB,
+            'dashbourd':dashbourdTabCB, 'edit employee':editEmployeeCB,
+            'history':historyTabCB,
+            'reports':reportsTabCB,
+            'setting':settingTabCB
+        }
 
-            # Check it in GUI
-            self.checkBox_4.setChecked(1)
-            self.checkBox_5.setChecked(1)
-            self.checkBox_6.setChecked(1)
-            self.checkBox_28.setChecked(1)
-            self.checkBox_29.setChecked(1)
-        
-        else:
-            add_client =  self.checkBox_4.isChecked()
-            edit_client =  self.checkBox_5.isChecked()
-            delete_client =  self.checkBox_6.isChecked()
-            export_client =  self.checkBox_28.isChecked()
-            import_client =  self.checkBox_29.isChecked()
-        
-        
+        # Run.
+        employeePermissions = TabWidget.SettingTab().commitEmployeePermissions(thisObjects)
 
-        #### Public Permission
-        # Special public
-        all_public = self.checkBox_32.isChecked()# Check ALL ,GUI
-        if all_public==1: # All public
-            # Add Value
-            book_tap =  1
-            client_tap =  1
-            dashbourd_tap = 1
-            history_tap =  1
-            reports_tap =  1
-            settings_tap =  1
-
-            # Check it in GUI
-            self.checkBox_7.setChecked(1)
-            self.checkBox_8.setChecked(1)
-            self.checkBox_9.setChecked(1)
-            self.checkBox_10.setChecked(1)
-            self.checkBox_11.setChecked(1)
-            self.checkBox_12.setChecked(1)
-        else:
-            book_tap =  self.checkBox_7.isChecked()
-            client_tap =  self.checkBox_8.isChecked()
-            dashbourd_tap =  self.checkBox_9.isChecked()
-            history_tap =  self.checkBox_10.isChecked()
-            reports_tap =  self.checkBox_11.isChecked()
-            settings_tap =  self.checkBox_12.isChecked()
+        if employeePermissions != None:
+            print("Employee {} Updated Successfuly!".format(employeeName))
 
         
-
-
-        #### Settings Permission
-        # Special employee
-        all_employee = self.checkBox_33.isChecked()# Check ALL ,GUI
-        if all_employee==1: # All employee
-            # Add Values
-            add_branch =  1
-            add_publisher =  1
-            add_author =  1
-            add_category =  1
-            add_employee =  1
-            edit_employee =  1
-
-            self.checkBox_21.setChecked(1)
-            self.checkBox_20.setChecked(1)
-            self.checkBox_19.setChecked(1)
-            self.checkBox_23.setChecked(1)
-            self.checkBox_22.setChecked(1)
-            self.checkBox_24.setChecked(1)
-
-        else:
-            add_branch =  self.checkBox_21.isChecked()
-            add_publisher =  self.checkBox_20.isChecked()
-            add_author =  self.checkBox_19.isChecked()
-            add_category =  self.checkBox_23.isChecked()
-            add_employee =  self.checkBox_22.isChecked()
-            edit_employee =  self.checkBox_24.isChecked()
-
-
-
-        # Simple Algorithm to know edit permission or add for first time
-        self.cur.execute("select name from employee_permission where name = '{}'".format(name))
-        check_name = len( self.cur.fetchall() )
-        
-        if check_name == 0: # Add Permission for first time
-            # Generate id
-            self.cur.execute("select * from employee_permission")
-            id = len( self.cur.fetchall() ) +1
-            
-            
-            # Check is There another id same and fix it
-            self.cur.execute("select * from employee_permission where id = '{}'".format(id))
-            count_id = len( self.cur.fetchall() )
-            
-            if count_id > 0:
-                id+=1
-
-            #### Insert data in databse
-            data = [(id, name,
-                add_book, edit_book, delete_book,export_book, import_book,
-                add_client, edit_client, delete_client, export_client, import_client,
-                book_tap, client_tap, dashbourd_tap, history_tap, reports_tap, settings_tap,
-                add_branch, add_publisher, add_author, add_category, add_employee, edit_employee,
-                admin
-            )]
-
-            self.cur.executemany("insert into employee_permission values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",data)
-
-            # Add this Aciotn in History
-            # Generate History id
-            self.cur.execute("select * from history")
-            history_id = len( self.cur.fetchall() ) +1
-            date = datetime.now().strftime('%d-%m-%Y %H:%M')
-
-
-            # Check is There another id same and fix it
-            self.cur.execute("select * from books where id = '{}'".format(history_id))
-            count_id = len( self.cur.fetchall() )
-            
-            if count_id > 0:
-                history_id+=1
-
-            self.cur.executemany("insert into history values (?,?,?,?,?,?)",[(
-                history_id, employee_id, "Add Employee Permissions", date, branch_id, name
-            )])
-
-            # Save data in database
-            self.db.commit()
-
-
-            print("Add Employee {} permission done".format(name))
-
-       
-        elif check_name != 0: # Update employee permissions
-            # Query to update data
-            sql = """update employee_permission
-                    set add_book = {0}, 
-                    edit_book = {1}, 
-                    delete_book = {2},
-                    export_book = {3}, 
-                    import_book = {4},
-                        add_client = {5}, 
-                        edit_client = {6}, 
-                        delete_client = {7}, 
-                        export_client = {8}, 
-                        import_client = {9},
-                            book_tap = {10}, 
-                            client_tap = {11}, 
-                            dashbourd_tap = {12}, 
-                            history_tap = {13}, 
-                            reports_tap = {14}, 
-                            settings_tap = {15},
-                        add_branch = {16}, 
-                        add_publisher = {17}, 
-                        add_author = {18}, 
-                        add_category = {19}, 
-                        add_employee = {20}, 
-                        edit_employee = {21},
-                    admin = {22}
-                where name = '{23}'
-                     """.format(
-                         add_book, edit_book, delete_book,export_book, import_book,
-                        add_client, edit_client, delete_client, export_client, import_client,
-                        book_tap, client_tap, dashbourd_tap, history_tap, reports_tap, settings_tap,
-                        add_branch, add_publisher, add_author, add_category, add_employee, edit_employee,
-                        admin ,
-                        name
-                     )
-
-            self.cur.execute(sql)
-
-
-            # Add this Aciotn in History
-            # Generate History id
-            self.cur.execute("select * from history")
-            history_id = len( self.cur.fetchall() ) +1
-            date = datetime.now().strftime('%d-%m-%Y %H:%M')
-
-
-            # Check is There another id same and fix it
-            self.cur.execute("select * from books where id = '{}'".format(history_id))
-            count_id = len( self.cur.fetchall() )
-            
-            if count_id > 0:
-                history_id+=1
-
-            self.cur.executemany("insert into history values (?,?,?,?,?,?)",[(
-                history_id, employee_id, "Edit Employee Permissions", date, branch_id, name
-            )])
-
-            # Save data in database
-            self.db.commit()
-
-
-            print("Update Employee {} permission done".format(name))
-
-
-
+    # Make Reports about System for The Admin.
     def Admin_Report(self):
-        pass   
+        
+        # Report as Excel Files.
+        self.ExportReportOfBooks()
+        self.ExportReportAboutClients()
+        self.ExportReportAboutEmployeies()
 
 
+        # Notification.
+        print("Files Exported!!")
 
-    ###############################################################
-    #### Open Taps when Click Buttons
+    """=====================================================================================
+    ================================= Profile Tab Functions ============================="""
+    # Load profile information to the system.
+    def LoadProfile(self):
+
+        # Variables.
+        name = self.label_105
+        email = self.label_106
+        joinDate = self.label_107
+        image = self.label_104
+
+        totalWorks = self.label_114
+
+        myObjects = [ name, email, joinDate, totalWorks, image ]
+
+
+        # Run.
+        profileData = TabWidget.ProfileTab().getProfileData(employee_id)
+
+        # Load Data.
+        indx=0
+        for label in myObjects:
+            if label != image:
+                label.setText( profileData[indx] )
+                indx+=1
+            else:
+                self.pixmap = QPixmap( profileData[indx] )
+                
+                label.setPixmap(self.pixmap)
+
+            
+
+    # Logout user from the system.
+    def LogoutSystem(self): # Tool.
+        
+        qApp.quit()
+    
+    # Load Navbar title data.
+    def LoadNavbarData(self): # Tool.
+        # Variables.
+        currentTime = DateFile.dmyDate
+        username = employee_id
+
+        self.label.setText(currentTime)
+        self.label_22.setText(username)
+        
+    """=====================================================================================
+    ================================= Open Tabs Functions. =============================="""
     
 
     def Open_Login_Tap(self):
         self.tabWidget.setCurrentIndex(0)
+        
     
     def Open_Reset_Password_Tap(self):
         self.tabWidget.setCurrentIndex(1)
-    
+
+    def OpenProfileTab(self):
+        self.tabWidget.setCurrentIndex(9)
+
+        self.LoadProfile()
+
     def Open_Daily_Movment_Tap(self):
         self.tabWidget.setCurrentIndex(2)
         self.TaodayWidget.setCurrentIndex(0)
 
         # Refresh Data
-
+        self.LoadNavbarData()
         tableName = self.tableWidget_2
         hpTool.showDailyBooks({'table':tableName})
+
+        
         
         
     def Open_Books_Tap(self):
@@ -2381,28 +1878,30 @@ class Main(QMainWindow , MainUI):
         # Add Image to Label
         self.label_19.setPixmap(self.pixmap)
 
-
-
-
-
-
+        # Notification
+        self.statusBar().showMessage("Books Loaded to Screen !!")
 
 
     
     def Open_Clients_Tap(self):
         self.tabWidget.setCurrentIndex(4)
         self.tabWidget_3.setCurrentIndex(0)
+        
+        # Load data to screen
         self.Show_All_Clients()
 
-        # Show Data in Tables
-        self.Show_All_Clients()
+        # Notification
+        self.statusBar().showMessage("Clients Loaded to Screen !!")
+
 
     
     def Open_Dashboard_Tap(self):
         self.tabWidget.setCurrentIndex(5)
+        
+        self.LoadSystemInformation()
 
     def Open_History_Tap(self):
-        self.Show_Hitory()
+        self.Show_History()
         self.tabWidget.setCurrentIndex(6)
 
     def Open_Reports_Tap(self):
@@ -2412,11 +1911,7 @@ class Main(QMainWindow , MainUI):
         # Refresh data
         self.Show_All_Book_Reports()
         self.Show_All_Client_Reports()
-        self.Show_Employee_Report()
-
-        
-
-        
+        self.Show_Employee_Report()       
 
 
 
@@ -2424,8 +1919,9 @@ class Main(QMainWindow , MainUI):
         self.tabWidget.setCurrentIndex(8)
         self.tabWidget_4.setCurrentIndex(0)
 
-        # Refreash Employee ComboBox data ,check GUI
+        # Refresh data.
         self.Show_Employee()
+
 
 
 
@@ -2458,5 +1954,8 @@ def main():
 if __name__ == '__main__':
     Show_Login()
     
-    if login_frame.loginStatus == True :
+    if login_frame.loginStatus == True and login_frame.resetPasswordStatus==False :
+        main()
+
+    elif login_frame.resetPasswordStatus==True :
         main()

@@ -11,10 +11,10 @@ LoginUI,_ = loadUiType('login.ui')
 # Local & Gloabl Variables
 sqlite3 = Database.ConnectSqlite3()
 loginStatus = 0
+resetPasswordStatus = 0
 userLoginID = 0
 
 print("Welcome to the System. \nLoading...")
-print("Ready to get Data...")
 
 class Login(QFrame , LoginUI):
 
@@ -51,6 +51,7 @@ class Login(QFrame , LoginUI):
     def handleButtons(self):
         
         self.pushButton.clicked.connect(self.loginBtn)
+        self.pushButton_2.clicked.connect(self.ResetPasswordBtn)
 
 
     def checkLoginFields(self):
@@ -131,21 +132,10 @@ class Login(QFrame , LoginUI):
             qApp.quit()
 
         
+    # Reset Password Button.
+    def ResetPasswordBtn(self):
+        global resetPasswordStatus
+        resetPasswordStatus = True
 
+        qApp.quit()
 
-
-
-
-
-
-# def login():
-#     app = QApplication(sys.argv)
-#     window = Login()
-#     window.show()
-#     app.exec_()
-
-
-if __name__ == '__main__':
-    print("Welcome to the System. \nLoading...")
-    print("Ready to get Data...")
-    # login()
